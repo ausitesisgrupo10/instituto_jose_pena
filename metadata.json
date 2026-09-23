@@ -1,0 +1,6 @@
+{
+  "name": "Instituto José Peña",
+  "description": "Sistema de Gestión Académica para el Instituto José Peña con control de usuarios, cursos, materias, parentescos, registros académicos y reportes por rol.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
