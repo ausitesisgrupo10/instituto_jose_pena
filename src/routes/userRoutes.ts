@@ -28,10 +28,6 @@ router.get('/', autorizarRoles('Admin', 'Docente', 'No Docente'), listarUsuarios
  */
 router.post('/', autorizarRoles('Admin'), crearUsuario);
 
-/**
- * @ruta PUT /api/usuarios/:id
- * @descripción Actualiza un usuario. Restringido a Admin.
- */
 router.put('/:id', autorizarRoles('Admin'), actualizarUsuario);
 
 /**
@@ -39,5 +35,19 @@ router.put('/:id', autorizarRoles('Admin'), actualizarUsuario);
  * @descripción Elimina un usuario por ID. Restringido a Admin.
  */
 router.delete('/:id', autorizarRoles('Admin'), eliminarUsuario);
+
+/**
+ * @ruta POST /api/usuarios/seed
+ * @descripción Restablece la base de datos con el dataset inicial oficial.
+ */
+router.post('/seed', autorizarRoles('Admin'), async (_req, res) => {
+  try {
+    const { sembrarDatasetCompleto } = await import('../db/seedDataset.js');
+    await sembrarDatasetCompleto();
+    res.json({ mensaje: 'Dataset institucional sembrado exitosamente.' });
+  } catch (error: any) {
+    res.status(500).json({ error: 'Error al ejecutar seeding', detalle: error.message });
+  }
+});
 
 export default router;

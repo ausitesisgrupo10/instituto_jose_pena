@@ -19,16 +19,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, errorMsg }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!dni) return;
+    if (!dni || !password) return;
     setCargando(true);
-    await onLogin(dni, password || '123456');
+    await onLogin(dni, password);
     setCargando(false);
-  };
-
-  const handleQuickLogin = (dniDemo: string) => {
-    setDni(dniDemo);
-    setPassword('123456');
-    onLogin(dniDemo, '123456');
   };
 
   return (
@@ -79,6 +73,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, errorMsg }) => {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="Ingrese su contraseña"
+              required
               className="w-full px-4 py-3 rounded-lg border border-slate-300 text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-[#1b2a4a]/20 focus:border-[#1b2a4a] transition-all placeholder:text-slate-400"
             />
           </div>
@@ -91,45 +86,6 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLogin, errorMsg }) => {
             {cargando ? 'Ingresando...' : 'Ingresar al Sistema'}
           </button>
         </form>
-
-        {/* Botones de Acceso Rápido para Prueba de Roles */}
-        <div className="mt-8 pt-6 border-t border-slate-200 w-full text-center">
-          <p className="text-[11px] font-bold text-slate-500 mb-3 uppercase tracking-wider">
-            Acceso Rápido Demo por Rol
-          </p>
-          <div className="flex flex-wrap gap-2 justify-center">
-            <button
-              onClick={() => handleQuickLogin('11111111')}
-              className="px-2.5 py-1 bg-[#e2d9f3] text-[#593196] hover:opacity-90 text-xs font-semibold rounded-md transition-colors cursor-pointer"
-            >
-              Admin
-            </button>
-            <button
-              onClick={() => handleQuickLogin('22222222')}
-              className="px-2.5 py-1 bg-blue-100 text-blue-800 hover:opacity-90 text-xs font-semibold rounded-md transition-colors cursor-pointer"
-            >
-              Docente
-            </button>
-            <button
-              onClick={() => handleQuickLogin('33333333')}
-              className="px-2.5 py-1 bg-slate-100 text-slate-700 hover:opacity-90 text-xs font-semibold rounded-md transition-colors cursor-pointer"
-            >
-              No Docente
-            </button>
-            <button
-              onClick={() => handleQuickLogin('40000000')}
-              className="px-2.5 py-1 bg-amber-100 text-amber-800 hover:opacity-90 text-xs font-semibold rounded-md transition-colors cursor-pointer"
-            >
-              Padre
-            </button>
-            <button
-              onClick={() => handleQuickLogin('31000000')}
-              className="px-2.5 py-1 bg-[#582EEF]/10 text-[#582EEF] hover:bg-[#582EEF]/20 border border-[#582EEF]/20 text-xs font-semibold rounded-md transition-colors cursor-pointer"
-            >
-              Alumno
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );

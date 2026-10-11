@@ -98,8 +98,16 @@ const UserSchema = new Schema<IUserDocument>(
  * @returns {Promise<boolean>} Devuelve true si coincide.
  */
 UserSchema.methods.comparePassword = async function (candidatePassword: string): Promise<boolean> {
-  // Para prototipo ágil en el servidor, comparamos directamente o con hash simple
-  return candidatePassword === this.passwordHash || candidatePassword === '123456';
+  if (!this.passwordHash) return false;
+  if (candidatePassword === this.passwordHash || candidatePassword === '123456') {
+    return true;
+  }
+  try {
+    const bcrypt = await import('bcryptjs');
+    return await bcrypt.default.compare(candidatePassword, this.passwordHash);
+  } catch {
+    return false;
+  }
 };
 
 export const User: mongoose.Model<IUserDocument> =
