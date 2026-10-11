@@ -163,3 +163,41 @@ export interface IDashboardStats {
   totalCursos: number;
   totalSecciones: number;
 }
+
+/**
+ * Tipos de eventos reconocidos en el calendario académico.
+ */
+export type TipoEventoAcademico =
+  | 'Examen'
+  | 'Reunion_Padres'
+  | 'Feriado'
+  | 'Acto'
+  | 'Cierre_Notas'
+  | 'Jornada_Docente'
+  | 'Inscripcion'
+  | 'Otro';
+
+export type NivelAcademicoEvento = 'Todos' | 'Secundario' | 'Primario' | 'Inicial';
+
+/**
+ * Interfaz que representa un Evento del Calendario Académico.
+ */
+export interface IEventoAcademico {
+  _id: string;
+  titulo: string;
+  descripcion: string;
+  tipo: TipoEventoAcademico;
+  fecha: string; // YYYY-MM-DD
+  fechaFin?: string | null;
+  hora: string;
+  lugar: string;
+  nivel: NivelAcademicoEvento;
+  curso_nombre?: string;
+  seccion_nombre?: string;
+  materia_nombre?: string;
+  responsable?: string;
+  importancia?: 'Alta' | 'Media' | 'Informativa';
+  activo?: boolean;
+  createdAt?: string;
+}
+

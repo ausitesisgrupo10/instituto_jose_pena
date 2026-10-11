@@ -23,6 +23,7 @@ import alumnoRoutes from './src/routes/alumnoRoutes.ts';
 import docenteRoutes from './src/routes/docenteRoutes.ts';
 import noDocenteRoutes from './src/routes/noDocenteRoutes.ts';
 import tutorRoutes from './src/routes/tutorRoutes.ts';
+import eventoAcademicoRoutes from './src/routes/eventoAcademicoRoutes.ts';
 
 const PORT = 3000;
 const HOST = '0.0.0.0';
@@ -55,6 +56,8 @@ async function iniciarServidor() {
   app.use('/api/docentes', docenteRoutes);
   app.use('/api/no-docente', noDocenteRoutes);
   app.use('/api/tutor', tutorRoutes);
+  app.use('/api/eventos-academicos', eventoAcademicoRoutes);
+  app.use('/api/calendario', eventoAcademicoRoutes);
 
   // Endpoint de salud
   app.get('/api/health', (req, res) => {
