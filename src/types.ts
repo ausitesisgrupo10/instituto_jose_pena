@@ -5,8 +5,10 @@
 
 /**
  * Roles permitidos en la plataforma del Instituto José Peña.
+ * - 'Admin': Soporte Técnico / Administración del Sistema (ABM de estructura y usuarios).
+ * - 'Director': Autoridad Directiva Institucional (Indicadores globales, reportes, auditoría).
  */
-export type UserRole = 'Admin' | 'Docente' | 'No Docente' | 'Alumno' | 'Padre';
+export type UserRole = 'Admin' | 'Director' | 'Docente' | 'No Docente' | 'Alumno' | 'Padre';
 
 /**
  * Estado del usuario en el sistema.
@@ -109,7 +111,7 @@ export interface IRegistroAcademico {
   materia_id: string | IMateria;
   tipo: TipoRegistroAcademico;
   trimestre?: number;
-  valor: string; // Ej: "8", "10", "Ausente", "Amonestación por conducta"
+  valor: string;
   fecha: string;
   observacion?: string;
   createdAt?: string;
@@ -200,4 +202,3 @@ export interface IEventoAcademico {
   activo?: boolean;
   createdAt?: string;
 }
-
