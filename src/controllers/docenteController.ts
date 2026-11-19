@@ -9,6 +9,11 @@ import { AuthRequest } from '../middleware/authMiddleware.js';
 import { Materia } from '../models/Materia.js';
 import { AsistenciaDocente } from '../models/AsistenciaDocente.js';
 import { User } from '../models/User.js';
+import { RegistroAcademico } from '../models/RegistroAcademico.js';
+import { Parentesco } from '../models/Parentesco.js';
+import { Seccion } from '../models/Seccion.js';
+import { Curso } from '../models/Curso.js';
+import { Asistencia } from '../models/Asistencia.js';
 
 /**
  * @función obtenerPerfilDocente
@@ -132,21 +137,35 @@ export async function obtenerInasistenciasYActasDocente(req: AuthRequest, res: R
       return;
     }
 
-    const registros = await AsistenciaDocente.find({ docente_id: req.usuario._id }).sort({ fecha: -1 });
+    const registros = await AsistenciaDocente.find({ docente_id: req.usuario._id })
+      .populate('revisado_por', 'nombre apellido rol')
+      .sort({ fecha: -1, createdAt: -1 });
 
     const resumen = {
       presentes: registros.filter((r) => r.estado === 'Presente').length,
       ausentes: registros.filter((r) => r.estado === 'Ausente').length,
       tardanzas: registros.filter((r) => r.estado === 'Tardanza').length,
       licencias: registros.filter((r) => r.estado === 'Licencia').length,
+      pendientes: registros.filter((r) => r.estado === 'Pendiente').length,
+      aprobadas: registros.filter((r) => r.estado === 'Aprobada').length,
+      desaprobadas: registros.filter((r) => r.estado === 'Desaprobada').length,
       total: registros.length,
     };
 
-    const listadoFormatted = registros.map((r) => ({
+    const listadoFormatted = registros.map((r: any) => ({
       id: r._id,
       fecha: r.fecha ? r.fecha.toISOString().split('T')[0] : '',
       estado: r.estado,
+      motivo: r.motivo || '-',
       observacion: r.observacion || 'Sin observaciones registradas',
+      motivo_rechazo: r.motivo_rechazo || '',
+      revisado_por: r.revisado_por
+        ? `${r.revisado_por.nombre} ${r.revisado_por.apellido}`
+        : '',
+      fecha_revision: r.fecha_revision ? new Date(r.fecha_revision).toISOString().split('T')[0] : '',
+      adjunto_nombre: r.adjunto_nombre || '',
+      adjunto_tipo: r.adjunto_tipo || '',
+      adjunto_data: r.adjunto_data || '',
     }));
 
     res.json({
@@ -156,6 +175,64 @@ export async function obtenerInasistenciasYActasDocente(req: AuthRequest, res: R
   } catch (error: any) {
     console.error('❌ Error al obtener inasistencias del docente:', error);
     res.status(500).json({ error: 'Error al consultar inasistencias y actas.', detalle: error.message });
+  }
+}
+
+/**
+ * @función solicitarInasistenciaDocente
+ * @descripción Permite al personal Docente o No Docente registrar una solicitud de inasistencia con motivo,
+ * observación opcional y constancia adjunta (PNG o PDF). Queda en estado 'Pendiente' y genera notificación al Director.
+ */
+export async function solicitarInasistenciaDocente(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!req.usuario) {
+      res.status(401).json({ error: 'Usuario no autenticado.' });
+      return;
+    }
+
+    const { fecha, motivo, observacion, adjunto_nombre, adjunto_tipo, adjunto_data } = req.body;
+
+    if (!motivo || String(motivo).trim() === '') {
+      res.status(400).json({ error: 'Debe seleccionar un motivo para la solicitud de inasistencia.' });
+      return;
+    }
+
+    if (adjunto_data) {
+      const tipoValido = adjunto_tipo === 'image/png' || adjunto_tipo === 'application/pdf';
+      const nombreLower = String(adjunto_nombre || '').toLowerCase();
+      const extensionValida = nombreLower.endsWith('.png') || nombreLower.endsWith('.pdf');
+      if (!tipoValido && !extensionValida) {
+        res.status(400).json({ error: 'Solo se permiten archivos en formato PNG o PDF como constancia.' });
+        return;
+      }
+    }
+
+    const nuevaSolicitud = await AsistenciaDocente.create({
+      docente_id: req.usuario._id,
+      fecha: fecha ? new Date(`${fecha}T12:00:00`) : new Date(),
+      estado: 'Pendiente',
+      motivo: String(motivo).trim(),
+      observacion: observacion ? String(observacion).trim() : '',
+      notificacion_leida: false,
+      adjunto_nombre: adjunto_nombre ? String(adjunto_nombre) : '',
+      adjunto_tipo: adjunto_tipo ? String(adjunto_tipo) : '',
+      adjunto_data: adjunto_data ? String(adjunto_data) : '',
+    });
+
+    res.status(201).json({
+      id: nuevaSolicitud._id,
+      fecha: nuevaSolicitud.fecha ? nuevaSolicitud.fecha.toISOString().split('T')[0] : '',
+      estado: nuevaSolicitud.estado,
+      motivo: nuevaSolicitud.motivo,
+      observacion: nuevaSolicitud.observacion || 'Sin observaciones registradas',
+      motivo_rechazo: '',
+      adjunto_nombre: nuevaSolicitud.adjunto_nombre || '',
+      adjunto_tipo: nuevaSolicitud.adjunto_tipo || '',
+      adjunto_data: nuevaSolicitud.adjunto_data || '',
+    });
+  } catch (error: any) {
+    console.error('❌ Error al solicitar inasistencia docente:', error);
+    res.status(500).json({ error: 'Error al registrar la solicitud de inasistencia.', detalle: error.message });
   }
 }
 
@@ -215,5 +292,321 @@ export async function obtenerMisMateriasYAlumnos(req: AuthRequest, res: Response
   } catch (error: any) {
     console.error('❌ Error al obtener materias y alumnos del docente:', error);
     res.status(500).json({ error: 'Error al consultar materias asignadas.', detalle: error.message });
+  }
+}
+
+/**
+ * Normaliza cadenas de texto eliminando acentos/diacríticos y convirtiendo a minúsculas
+ * para búsquedas flexibles e insensibles a tildes o mayúsculas.
+ */
+function normalizarTexto(texto: string): string {
+  return texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * @función buscarRegistrosDocente
+ * @descripción Multifiltro de registros de alumnos por Curso, División, Turno, Apellido, Nombre y/o DNI.
+ * Devuelve únicamente los campos resumidos: DNI, Apellido, Nombre, Curso y Turno (más división e ID para selección).
+ */
+export async function buscarRegistrosDocente(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!req.usuario) {
+      res.status(401).json({ error: 'Usuario no autenticado.' });
+      return;
+    }
+
+    const { curso, division, turno, apellido, nombre, dni } = req.query as Record<string, string | undefined>;
+
+    const filtroCurso = curso ? normalizarTexto(curso) : '';
+    const filtroDivision = division ? normalizarTexto(division) : '';
+    const filtroTurno = turno ? normalizarTexto(turno) : '';
+    const filtroApellido = apellido ? normalizarTexto(apellido) : '';
+    const filtroNombre = nombre ? normalizarTexto(nombre) : '';
+    const filtroDni = dni ? dni.replace(/\D/g, '').trim() : '';
+
+    const [alumnos, todasSecciones, todosCursos] = await Promise.all([
+      User.find({ rol: 'Alumno' })
+        .select('_id dni nombre apellido turno curso_id seccion_id perfil_metadata')
+        .populate('curso_id', 'nombre_curso nivel')
+        .populate({
+          path: 'seccion_id',
+          select: 'nombre_seccion turno curso_id',
+          populate: { path: 'curso_id', select: 'nombre_curso nivel' },
+        })
+        .sort({ apellido: 1, nombre: 1 }),
+      Seccion.find({}).populate('curso_id', 'nombre_curso nivel'),
+      Curso.find({}),
+    ]);
+
+    const mapaSecciones = new Map<string, any>();
+    for (const s of todasSecciones) {
+      mapaSecciones.set(String(s._id), s);
+    }
+    const mapaCursos = new Map<string, any>();
+    for (const c of todosCursos) {
+      mapaCursos.set(String(c._id), c);
+    }
+
+    const resultados = alumnos
+      .map((al: any) => {
+        const metaSeccion = al.perfil_metadata?.seccion_id
+          ? mapaSecciones.get(String(al.perfil_metadata.seccion_id))
+          : null;
+        const metaCurso = al.perfil_metadata?.curso_id
+          ? mapaCursos.get(String(al.perfil_metadata.curso_id))
+          : null;
+
+        const cursoNombre =
+          al.curso_id?.nombre_curso ||
+          al.seccion_id?.curso_id?.nombre_curso ||
+          metaCurso?.nombre_curso ||
+          metaSeccion?.curso_id?.nombre_curso ||
+          al.perfil_metadata?.curso ||
+          'Sin curso';
+
+        const divisionNombre =
+          al.seccion_id?.nombre_seccion ||
+          metaSeccion?.nombre_seccion ||
+          al.perfil_metadata?.seccion ||
+          'Sin división';
+
+        const turnoValor =
+          al.turno ||
+          al.seccion_id?.turno ||
+          metaSeccion?.turno ||
+          al.perfil_metadata?.turno ||
+          'Sin turno';
+
+        return {
+          id: String(al._id),
+          dni: al.dni || '',
+          apellido: al.apellido || '',
+          nombre: al.nombre || '',
+          curso: cursoNombre,
+          division: divisionNombre,
+          turno: turnoValor,
+        };
+      })
+      .filter((item) => {
+        if (filtroCurso && !normalizarTexto(item.curso).includes(filtroCurso)) {
+          return false;
+        }
+        if (filtroDivision && !normalizarTexto(item.division).includes(filtroDivision)) {
+          return false;
+        }
+        if (filtroTurno && normalizarTexto(item.turno) !== filtroTurno) {
+          return false;
+        }
+        if (filtroApellido && !normalizarTexto(item.apellido).includes(filtroApellido)) {
+          return false;
+        }
+        if (filtroNombre && !normalizarTexto(item.nombre).includes(filtroNombre)) {
+          return false;
+        }
+        if (filtroDni && !String(item.dni).replace(/\D/g, '').includes(filtroDni)) {
+          return false;
+        }
+        return true;
+      });
+
+    res.json({
+      total: resultados.length,
+      resultados,
+    });
+  } catch (error: any) {
+    console.error('❌ Error al buscar registros en panel docente:', error);
+    res.status(500).json({ error: 'Error al buscar registros.', detalle: error.message });
+  }
+}
+
+/**
+ * @función obtenerDetalleRegistroAlumno
+ * @descripción Devuelve el detalle completo de un alumno seleccionado desde el multifiltro,
+ * cruzando en tiempo real todas las colecciones y relaciones cargadas por todos los roles
+ * (Admin, Docente, No Docente, Padre y Alumno): User, Curso, Seccion, Parentesco, Materia, RegistroAcademico y Asistencia.
+ */
+export async function obtenerDetalleRegistroAlumno(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (!req.usuario) {
+      res.status(401).json({ error: 'Usuario no autenticado.' });
+      return;
+    }
+
+    const { alumnoId } = req.params;
+
+    const alumno: any = await User.findOne({ _id: alumnoId, rol: 'Alumno' })
+      .select('_id dni nombre apellido turno curso_id seccion_id perfil_metadata')
+      .populate('curso_id', 'nombre_curso nivel')
+      .populate({
+        path: 'seccion_id',
+        select: 'nombre_seccion turno curso_id',
+        populate: { path: 'curso_id', select: 'nombre_curso nivel' },
+      });
+
+    if (!alumno) {
+      res.status(404).json({ error: 'Registro de alumno no encontrado.' });
+      return;
+    }
+
+    const meta = alumno.perfil_metadata || {};
+
+    // Resolver sección/curso también desde perfil_metadata si fue asignado así por Admin
+    let seccionResuelta: any = alumno.seccion_id || null;
+    if (!seccionResuelta && meta.seccion_id) {
+      seccionResuelta = await Seccion.findById(meta.seccion_id).populate('curso_id', 'nombre_curso nivel');
+    }
+    let cursoResuelto: any = alumno.curso_id || seccionResuelta?.curso_id || null;
+    if (!cursoResuelto && meta.curso_id) {
+      cursoResuelto = await Curso.findById(meta.curso_id);
+    }
+
+    const cursoNombre = cursoResuelto?.nombre_curso || meta.curso || 'Sin curso';
+    const divisionNombre = seccionResuelta?.nombre_seccion || meta.seccion || 'Sin división';
+    const turnoValor = alumno.turno || seccionResuelta?.turno || meta.turno || 'Sin turno';
+
+    const seccionId = seccionResuelta?._id || meta.seccion_id || null;
+
+    // Consultar en paralelo todas las relaciones reales cargadas por Admin, Docente, No Docente y Padre
+    const [parentescos, materiasSeccion, registros, asistenciasAlumno] = await Promise.all([
+      Parentesco.find({ alumno_id: alumno._id }).populate(
+        'padre_id',
+        'nombre apellido dni perfil_metadata'
+      ),
+      seccionId
+        ? Materia.find({ seccion_id: seccionId }).select('_id nombre_materia docente_id')
+        : Promise.resolve([]),
+      RegistroAcademico.find({ alumno_id: alumno._id })
+        .populate('materia_id', '_id nombre_materia')
+        .sort({ fecha: -1 }),
+      Asistencia.find({ persona_id: alumno._id, tipo_persona: 'Alumno' })
+        .sort({ fecha: -1 })
+        .limit(10),
+    ]);
+
+    // 1. Padres / Tutores registrados en Parentesco
+    const padresTutores = parentescos
+      .filter((p: any) => p.padre_id)
+      .map((p: any) => ({
+        apellido: p.padre_id.apellido || '',
+        nombre: p.padre_id.nombre || '',
+        vinculo: p.tipo_vinculo || 'Tutor',
+      }));
+
+    // 2. Materias y calificaciones por trimestre (de todas las cargas realizadas por Docentes/Admin/No Docente)
+    const mapaMaterias = new Map<
+      string,
+      {
+        materia_id: string;
+        nombre_materia: string;
+        trimestre1: string[];
+        trimestre2: string[];
+        trimestre3: string[];
+      }
+    >();
+
+    for (const mat of materiasSeccion) {
+      const idStr = String(mat._id);
+      mapaMaterias.set(idStr, {
+        materia_id: idStr,
+        nombre_materia: mat.nombre_materia,
+        trimestre1: [],
+        trimestre2: [],
+        trimestre3: [],
+      });
+    }
+
+    const sanciones: Array<{
+      id: string;
+      fecha: string;
+      valor: string;
+      observacion: string;
+      materia: string;
+    }> = [];
+
+    for (const reg of registros as any[]) {
+      const matObj = reg.materia_id;
+      const matId = matObj?._id ? String(matObj._id) : 'sin-materia';
+      const matNombre = matObj?.nombre_materia || 'Materia';
+
+      if (reg.tipo === 'nota') {
+        if (!mapaMaterias.has(matId)) {
+          mapaMaterias.set(matId, {
+            materia_id: matId,
+            nombre_materia: matNombre,
+            trimestre1: [],
+            trimestre2: [],
+            trimestre3: [],
+          });
+        }
+        const entry = mapaMaterias.get(matId)!;
+        const notaFormateada = !isNaN(parseFloat(reg.valor))
+          ? parseFloat(reg.valor).toFixed(2)
+          : String(reg.valor);
+
+        const obsStr = String(reg.observacion || '');
+        if (reg.trimestre === 2 || (!reg.trimestre && obsStr.includes('2°'))) {
+          entry.trimestre2.push(notaFormateada);
+        } else if (reg.trimestre === 3 || (!reg.trimestre && obsStr.includes('3°'))) {
+          entry.trimestre3.push(notaFormateada);
+        } else {
+          entry.trimestre1.push(notaFormateada);
+        }
+      } else if (reg.tipo === 'sancion') {
+        sanciones.push({
+          id: String(reg._id),
+          fecha: reg.fecha ? new Date(reg.fecha).toISOString().split('T')[0] : '',
+          valor: reg.valor || 'Sanción',
+          observacion: reg.observacion || 'Sin observación especificada.',
+          materia: matNombre,
+        });
+      }
+    }
+
+    // 3. Observación general (prioriza la del perfil y complementa con comentarios de preceptoría/asistencias si existen)
+    const comentariosAsistencia = (asistenciasAlumno as any[])
+      .filter((a) => a.comentario && String(a.comentario).trim() !== '')
+      .map((a) => `${a.fecha ? new Date(a.fecha).toISOString().split('T')[0] : ''}: ${a.comentario}`);
+
+    let observacionGeneral = meta.observacion_general || '';
+    if (!observacionGeneral && comentariosAsistencia.length > 0) {
+      observacionGeneral = comentariosAsistencia.join(' | ');
+    } else if (!observacionGeneral) {
+      observacionGeneral = 'Sin observaciones generales registradas para el estudiante.';
+    }
+
+    // Si algún padre tiene teléfono cargado en su perfil_metadata, usarlo como respaldo para contacto de emergencia
+    const primerTutorConTel = parentescos
+      .map((p: any) => p.padre_id?.perfil_metadata?.celular || p.padre_id?.perfil_metadata?.telefono)
+      .find(Boolean);
+
+    res.json({
+      id: String(alumno._id),
+      dni: alumno.dni || '',
+      apellido: alumno.apellido || '',
+      nombre: alumno.nombre || '',
+      curso: cursoNombre,
+      division: divisionNombre,
+      turno: turnoValor,
+      datos_personales: {
+        padres_tutores: padresTutores,
+        direccion: meta.direccion || 'No registrada',
+        barrio: meta.barrio || 'No registrado',
+        localidad: meta.localidad || 'No registrada',
+        provincia: meta.provincia || 'No registrada',
+        contacto_emergencia: meta.contacto_emergencia || primerTutorConTel || 'No registrado',
+        contacto: meta.contacto || meta.celular || meta.telefono || 'No registrado',
+      },
+      materias: Array.from(mapaMaterias.values()),
+      cantidad_sanciones: sanciones.length,
+      sanciones,
+      observacion_general: observacionGeneral,
+    });
+  } catch (error: any) {
+    console.error('❌ Error al obtener detalle del registro del alumno:', error);
+    res.status(500).json({ error: 'Error al consultar el detalle del registro.', detalle: error.message });
   }
 }

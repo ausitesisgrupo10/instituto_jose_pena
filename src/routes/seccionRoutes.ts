@@ -16,7 +16,7 @@ const router = Router();
 
 router.use(autenticarJWT);
 
-router.get('/', autorizarRoles('Admin', 'Docente', 'No Docente'), listarSecciones);
+router.get('/', autorizarRoles('Admin', 'Director', 'Docente', 'No Docente'), listarSecciones);
 router.post('/', autorizarRoles('Admin'), crearSeccion);
 router.put('/:id', autorizarRoles('Admin'), actualizarSeccion);
 router.delete('/:id', autorizarRoles('Admin'), eliminarSeccion);

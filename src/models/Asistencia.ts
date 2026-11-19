@@ -11,7 +11,7 @@ import mongoose, { Schema, Document } from 'mongoose';
  */
 export interface IAsistenciaDocument extends Document {
   persona_id: mongoose.Types.ObjectId;
-  tipo_persona: 'Alumno' | 'Docente';
+  tipo_persona: 'Alumno' | 'Docente' | 'No Docente';
   fecha: Date;
   estado: 'Presente' | 'Ausente';
   comentario?: string;
@@ -33,7 +33,7 @@ const AsistenciaSchema = new Schema<IAsistenciaDocument>(
     tipo_persona: {
       type: String,
       required: [true, 'El tipo de persona es obligatorio.'],
-      enum: ['Alumno', 'Docente'],
+      enum: ['Alumno', 'Docente', 'No Docente'],
     },
     fecha: {
       type: Date,

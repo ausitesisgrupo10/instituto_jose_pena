@@ -36,19 +36,19 @@ router.get('/proximos', obtenerProximosEventos);
  * @ruta POST /api/eventos-academicos
  * @descripción Crear un nuevo evento en el calendario (Admin y Docente).
  */
-router.post('/', autorizarRoles('Admin', 'Docente'), crearEventoAcademico);
+router.post('/', autorizarRoles('Admin', 'Director', 'Docente'), crearEventoAcademico);
 
 /**
  * @ruta PUT /api/eventos-academicos/:id
- * @descripción Actualizar un evento existente (Admin y Docente).
+ * @descripción Actualizar un evento existente (Admin, Director y Docente).
  */
-router.put('/:id', autorizarRoles('Admin', 'Docente'), actualizarEventoAcademico);
+router.put('/:id', autorizarRoles('Admin', 'Director', 'Docente'), actualizarEventoAcademico);
 
 /**
  * @ruta DELETE /api/eventos-academicos/:id
- * @descripción Eliminar un evento (Admin y Docente).
+ * @descripción Eliminar un evento (Admin, Director y Docente).
  */
-router.delete('/:id', autorizarRoles('Admin', 'Docente'), eliminarEventoAcademico);
+router.delete('/:id', autorizarRoles('Admin', 'Director', 'Docente'), eliminarEventoAcademico);
 
 /**
  * @ruta POST /api/eventos-academicos/restablecer

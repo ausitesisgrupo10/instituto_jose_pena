@@ -18,9 +18,9 @@ const router = Router();
 router.use(autenticarJWT);
 
 router.get('/', listarRegistros);
-router.post('/', autorizarRoles('Admin', 'Docente', 'No Docente'), validarTitularidadMateria, registrarCalificacion);
-router.put('/:id', autorizarRoles('Admin', 'Docente', 'No Docente'), validarTitularidadMateria, actualizarRegistro);
-router.delete('/:id', autorizarRoles('Admin', 'Docente'), validarTitularidadMateria, eliminarRegistro);
+router.post('/', autorizarRoles('Admin', 'Director', 'Docente', 'No Docente'), validarTitularidadMateria, registrarCalificacion);
+router.put('/:id', autorizarRoles('Admin', 'Director', 'Docente', 'No Docente'), validarTitularidadMateria, actualizarRegistro);
+router.delete('/:id', autorizarRoles('Admin', 'Director', 'Docente'), validarTitularidadMateria, eliminarRegistro);
 
 export default router;
 

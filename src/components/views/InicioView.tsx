@@ -5,10 +5,11 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { Calendar, LayoutDashboard, Sparkles, BookOpen, Users, Clock, ArrowRight } from 'lucide-react';
+import { Calendar, BookOpen, ArrowRight } from 'lucide-react';
 import { IDashboardStats, IUser } from '../../types.js';
 import { AlumnoDashboardView } from './AlumnoDashboardView.js';
 import { DocenteDashboardView } from './DocenteDashboardView.js';
+import { DirectorDashboardView } from './DirectorDashboardView.js';
 import { CalendarioAcademico } from '../CalendarioAcademico.js';
 
 interface InicioViewProps {
@@ -87,49 +88,14 @@ export const InicioView: React.FC<InicioViewProps> = ({ usuario, onNavigate }) =
     );
   }
 
-  // Si el usuario es Docente, permitimos alternar entre su Panel Docente y el Calendario Académico Institucional
+  // Si el usuario es Docente, renderizamos directamente su Panel Docente principal
   if (usuario?.rol === 'Docente') {
-    return (
-      <div className="space-y-6">
-        {/* Barra superior de pestañas para Docentes */}
-        <div className="max-w-7xl mx-auto px-6 pt-6">
-          <div className="bg-white p-1.5 rounded-2xl border border-slate-200/90 shadow-2xs inline-flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setSubTabRol('panel')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                subTabRol === 'panel'
-                  ? 'bg-[#1d3557] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <LayoutDashboard className="w-4 h-4" />
-              <span>Panel Docente y Gestión de Notas</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setSubTabRol('calendario')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                subTabRol === 'calendario'
-                  ? 'bg-[#1d3557] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <Calendar className="w-4 h-4" />
-              <span>Calendario Académico Institucional</span>
-            </button>
-          </div>
-        </div>
+    return <DocenteDashboardView usuario={usuario} />;
+  }
 
-        {subTabRol === 'panel' ? (
-          <DocenteDashboardView usuario={usuario} />
-        ) : (
-          <div className="max-w-7xl mx-auto px-6 pb-12">
-            <CalendarioAcademico usuario={usuario} onNavigateToSection={onNavigate} />
-          </div>
-        )}
-      </div>
-    );
+  // Si el usuario es Director, renderizamos el Tablero Directivo
+  if (usuario?.rol === 'Director') {
+    return <DirectorDashboardView usuario={usuario} onNavigate={onNavigate} />;
   }
 
   // Tarjetas KPI institucionales para Administradores, No Docentes y personal general

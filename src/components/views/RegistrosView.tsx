@@ -5,8 +5,11 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { FileSpreadsheet } from 'lucide-react';
 import { IMateria, IRegistroAcademico, IUser } from '../../types.js';
 import { Modal } from '../Modal.js';
+import { CargaCalificacionesDocente } from '../CargaCalificacionesDocente.js';
+import { exportarRegistrosAExcel, FilaExcelRegistro } from '../../utils/exportExcel.js';
 
 interface RegistrosViewProps {
   usuario: IUser | null;
@@ -282,8 +285,79 @@ export const RegistrosView: React.FC<RegistrosViewProps> = ({ usuario }) => {
     }
   };
 
+  // Exportar registros filtrados a Excel (.xlsx) con todas las columnas solicitadas
+  const handleExportarExcel = () => {
+    if (registrosFiltrados.length === 0) return;
+
+    // 1. Precalcular promedio general por (alumno_id + materia_id) usando todas las notas del alumno en esa materia
+    const notasPorAlumnoMateria = new Map<string, number[]>();
+    const sancionesPorAlumno = new Map<string, number>();
+
+    registros.forEach((r) => {
+      const aluId = String(typeof r.alumno_id === 'object' ? r.alumno_id?._id : r.alumno_id);
+      const matId = String(typeof r.materia_id === 'object' ? r.materia_id?._id : r.materia_id);
+
+      if (r.tipo === 'nota') {
+        const valNum = parseFloat(r.valor);
+        if (!isNaN(valNum)) {
+          const key = `${aluId}__${matId}`;
+          const arr = notasPorAlumnoMateria.get(key) || [];
+          arr.push(valNum);
+          notasPorAlumnoMateria.set(key, arr);
+        }
+      } else if (r.tipo === 'sancion') {
+        sancionesPorAlumno.set(aluId, (sancionesPorAlumno.get(aluId) || 0) + 1);
+      }
+    });
+
+    const filas: FilaExcelRegistro[] = registrosFiltrados.map((r) => {
+      const aluObj = typeof r.alumno_id === 'object' ? r.alumno_id : null;
+      const matObj = typeof r.materia_id === 'object' ? r.materia_id : null;
+      const secObj = matObj && typeof matObj.seccion_id === 'object' ? matObj.seccion_id : null;
+      const curObj = secObj && typeof secObj.curso_id === 'object' ? secObj.curso_id : null;
+
+      const aluId = String(aluObj?._id || r.alumno_id || '');
+      const matId = String(matObj?._id || r.materia_id || '');
+
+      const notasAluMat = notasPorAlumnoMateria.get(`${aluId}__${matId}`) || [];
+      const promedioMateria =
+        notasAluMat.length > 0
+          ? (notasAluMat.reduce((acc, val) => acc + val, 0) / notasAluMat.length).toFixed(2)
+          : '-';
+
+      const notaTexto =
+        r.tipo === 'nota'
+          ? !isNaN(parseFloat(r.valor))
+            ? parseFloat(r.valor).toFixed(2)
+            : r.valor
+          : r.valor || '-';
+
+      const trimestreTexto =
+        r.tipo === 'nota' ? (r.trimestre ? `${r.trimestre}° Trimestre` : '1° Trimestre') : '-';
+
+      return {
+        dni: aluObj?.dni || '-',
+        apellido: aluObj?.apellido || '-',
+        nombre: aluObj?.nombre || '-',
+        curso: curObj?.nombre_curso || '-',
+        division: secObj?.nombre_seccion || '-',
+        materia: matObj?.nombre_materia || '-',
+        nota: notaTexto,
+        trimestre: trimestreTexto,
+        promedioGeneralMateria: promedioMateria,
+        cantidadSanciones: sancionesPorAlumno.get(aluId) || 0,
+      };
+    });
+
+    exportarRegistrosAExcel(filas, 'Registros_y_Sanciones');
+  };
+
   return (
     <div className="p-8 max-w-7xl mx-auto font-sans space-y-6">
+      {/* Grilla de Carga Trimestral de Notas y Calificaciones (movida desde Panel Docente) */}
+      {userRol === 'Docente' && (
+        <CargaCalificacionesDocente todosLosRegistros={registros} onDataChanged={fetchDatos} />
+      )}
       {/* Tarjeta Resumen para Alumnos / Padres */}
       {(userRol === 'Alumno' || userRol === 'Padre') && (
         <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-xs grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -323,18 +397,30 @@ export const RegistrosView: React.FC<RegistrosViewProps> = ({ usuario }) => {
               />
             </div>
 
-            {/* Botón Cargar Registro */}
-            {(userRol === 'Admin' || userRol === 'Docente' || userRol === 'No Docente') && (
+            {/* Botones de Acción: Descargar Excel y Cargar Registro */}
+            <div className="flex flex-wrap items-center gap-2.5">
               <button
-                onClick={handleOpenModalCrear}
-                className="px-5 py-2 bg-[#1b2a4a] hover:bg-[#23365c] text-white font-semibold text-sm rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center justify-center gap-2"
+                type="button"
+                onClick={handleExportarExcel}
+                disabled={registrosFiltrados.length === 0}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
-                </svg>
-                + Nuevo registro
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Descargar Excel</span>
               </button>
-            )}
+
+              {(userRol === 'Admin' || userRol === 'Director' || userRol === 'Docente' || userRol === 'No Docente') && (
+                <button
+                  onClick={handleOpenModalCrear}
+                  className="px-5 py-2 bg-[#1b2a4a] hover:bg-[#23365c] text-white font-semibold text-sm rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" />
+                  </svg>
+                  + Nuevo registro
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Desplegables de Filtro */}
@@ -376,7 +462,7 @@ export const RegistrosView: React.FC<RegistrosViewProps> = ({ usuario }) => {
             </div>
 
             {/* Filtro por Alumno */}
-            {(userRol === 'Admin' || userRol === 'Docente' || userRol === 'No Docente') && (
+            {(userRol === 'Admin' || userRol === 'Director' || userRol === 'Docente' || userRol === 'No Docente') && (
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
                   Alumno Específico
@@ -417,7 +503,7 @@ export const RegistrosView: React.FC<RegistrosViewProps> = ({ usuario }) => {
                   <th className="py-3.5 px-4">CONCEPTO / VALOR</th>
                   <th className="py-3.5 px-4">FECHA</th>
                   <th className="py-3.5 px-4">OBSERVACIÓN</th>
-                  {(userRol === 'Admin' || userRol === 'Docente' || userRol === 'No Docente') && (
+                  {(userRol === 'Admin' || userRol === 'Director' || userRol === 'Docente' || userRol === 'No Docente') && (
                     <th className="py-3.5 px-4 text-right">ACCIONES</th>
                   )}
                 </tr>
@@ -432,6 +518,7 @@ export const RegistrosView: React.FC<RegistrosViewProps> = ({ usuario }) => {
                   const docIdMateria = typeof matObj?.docente_id === 'object' ? matObj?.docente_id?._id : matObj?.docente_id;
                   const esTitularDocente =
                     userRol === 'Admin' ||
+                    userRol === 'Director' ||
                     userRol === 'No Docente' ||
                     (userRol === 'Docente' && String(docIdMateria) === String(usuario?._id));
 
@@ -469,7 +556,7 @@ export const RegistrosView: React.FC<RegistrosViewProps> = ({ usuario }) => {
                         {r.fecha ? new Date(r.fecha).toLocaleDateString('es-AR') : '-'}
                       </td>
                       <td className="py-4 px-4 text-xs text-slate-500 max-w-xs truncate">{r.observacion || '-'}</td>
-                      {(userRol === 'Admin' || userRol === 'Docente' || userRol === 'No Docente') && (
+                      {(userRol === 'Admin' || userRol === 'Director' || userRol === 'Docente' || userRol === 'No Docente') && (
                         <td className="py-4 px-4 text-right whitespace-nowrap">
                           {esTitularDocente ? (
                             <div className="inline-flex items-center gap-2">

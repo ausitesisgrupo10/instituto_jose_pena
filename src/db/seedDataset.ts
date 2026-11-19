@@ -25,6 +25,8 @@ import { AsistenciaDocente } from '../models/AsistenciaDocente.js';
 // Dataset crudo suministrado
 export const rawDataset = {
   usuarios: [
+    { nombre: 'Roberto', apellido: 'Peña', dni: '20123456', rol: 'Director', estado: 'Activo', seccion: null, turno: null, password: 'Director123!' },
+
     { nombre: 'Carlos', apellido: 'Gómez', dni: '28456123', rol: 'Administrador', estado: 'Activo', seccion: null, turno: null, password: 'Admin123!' },
     { nombre: 'Mariana', apellido: 'López', dni: '29876543', rol: 'Administrador', estado: 'Activo', seccion: null, turno: null, password: 'Admin123!' },
     { nombre: 'Roberto', apellido: 'Fernández', dni: '27345678', rol: 'Administrador', estado: 'Activo', seccion: null, turno: null, password: 'Admin123!' },
@@ -88,7 +90,8 @@ export const rawDataset = {
 /**
  * Normaliza el rol del dataset al enum admitido por el sistema
  */
-function normalizarRol(rol: string): 'Admin' | 'Docente' | 'No Docente' | 'Alumno' | 'Padre' {
+function normalizarRol(rol: string): 'Admin' | 'Director' | 'Docente' | 'No Docente' | 'Alumno' | 'Padre' {
+  if (rol === 'Director') return 'Director';
   if (rol === 'Administrador' || rol === 'Admin') return 'Admin';
   if (rol === 'Padre / Tutor' || rol === 'Padre' || rol === 'Tutor') return 'Padre';
   if (rol === 'Docente') return 'Docente';
@@ -188,6 +191,7 @@ export async function sembrarDatasetCompleto(): Promise<void> {
 
     const permisos: string[] = [];
     if (rolNormalizado === 'Admin') permisos.push('ALL');
+    if (rolNormalizado === 'Director') permisos.push('ALL_READ', 'AUDITAR_CALIFICACIONES', 'REPORTES', 'ASISTENCIA', 'CALENDARIO');
     if (rolNormalizado === 'Docente') permisos.push('REGISTRAR_NOTAS', 'VER_ALUMNOS');
     if (rolNormalizado === 'No Docente') permisos.push('ASISTENCIA', 'SANCIONES', 'PROGRAMAS');
     if (rolNormalizado === 'Alumno') permisos.push('CONSULTA_PROPIA');
@@ -198,11 +202,75 @@ export async function sembrarDatasetCompleto(): Promise<void> {
       dni: u.dni,
     };
 
+    const datosPersonalesPorDni: Record<string, Record<string, string>> = {
+      '48123456': {
+        direccion: 'Av. Rafael Núñez 3420',
+        barrio: 'Cerro de las Rosas',
+        localidad: 'Córdoba',
+        provincia: 'Córdoba',
+        contacto: '351-482-1120',
+        contacto_emergencia: '351-512-9044',
+        observacion_general: 'Estudiante participativo con muy buen desempeño general y asistencia regular.',
+      },
+      '48234567': {
+        direccion: 'Bv. Chacabuco 845',
+        barrio: 'Nueva Córdoba',
+        localidad: 'Córdoba',
+        provincia: 'Córdoba',
+        contacto: '351-469-3315',
+        contacto_emergencia: '351-533-7781',
+        observacion_general: 'Rendimiento académico destacado en el ciclo lectivo actual.',
+      },
+      '47345678': {
+        direccion: 'Av. Colón 2150',
+        barrio: 'Alberdi',
+        localidad: 'Córdoba',
+        provincia: 'Córdoba',
+        contacto: '351-471-8890',
+        contacto_emergencia: '351-544-2019',
+        observacion_general: 'Buen progreso en materias exactas; se recomienda seguimiento en entregas prácticas.',
+      },
+      '47456789': {
+        direccion: 'Calle Roma 612',
+        barrio: 'General Paz',
+        localidad: 'Córdoba',
+        provincia: 'Córdoba',
+        contacto: '351-452-6640',
+        contacto_emergencia: '351-598-4410',
+        observacion_general: 'Excelente convivencia escolar y compromiso en proyectos grupales.',
+      },
+      '46567890': {
+        direccion: 'Av. Fuerza Aérea 1890',
+        barrio: 'Los Naranjos',
+        localidad: 'Córdoba',
+        provincia: 'Córdoba',
+        contacto: '351-465-9102',
+        contacto_emergencia: '351-577-3185',
+        observacion_general: 'Estudiante en proceso de consolidación de contenidos de 3° Año.',
+      },
+    };
+
     if (rolNormalizado === 'Alumno') {
+      const datosExtra = datosPersonalesPorDni[u.dni] || {
+        direccion: 'Av. Rafael Núñez 2410',
+        barrio: 'Villa Cabrera',
+        localidad: 'Córdoba',
+        provincia: 'Córdoba',
+        contacto: '351-555-0142',
+        contacto_emergencia: '351-555-0199',
+        observacion_general: 'Sin observaciones generales registradas.',
+      };
       perfilMetadata.legajo = `ALU-${u.dni.slice(-4)}`;
       perfilMetadata.turno = turnoFinal || 'Mañana';
       perfilMetadata.seccion_id = seccionId;
       perfilMetadata.curso_id = cursoId;
+      perfilMetadata.direccion = datosExtra.direccion;
+      perfilMetadata.barrio = datosExtra.barrio;
+      perfilMetadata.localidad = datosExtra.localidad;
+      perfilMetadata.provincia = datosExtra.provincia;
+      perfilMetadata.contacto = datosExtra.contacto;
+      perfilMetadata.contacto_emergencia = datosExtra.contacto_emergencia;
+      perfilMetadata.observacion_general = datosExtra.observacion_general;
     } else if (rolNormalizado === 'Docente') {
       perfilMetadata.legajo = `DOC-${u.dni.slice(-4)}`;
       perfilMetadata.titulo = 'Profesor de Nivel Secundario';
@@ -312,6 +380,7 @@ export async function sembrarDatasetCompleto(): Promise<void> {
       { alumno_id: alumnoTomas._id, materia_id: mat2._id, tipo: 'nota', valor: '8.00', trimestre: 1, fecha: new Date('2026-04-18'), observacion: '1° Trimestre - Diagnóstico' },
       { alumno_id: alumnoTomas._id, materia_id: mat2._id, tipo: 'nota', valor: '8.50', trimestre: 2, fecha: new Date('2026-07-12'), observacion: '2° Trimestre - Proyecto' },
       { alumno_id: alumnoTomas._id, materia_id: mat1._id, tipo: 'inasistencia', valor: 'Ausente', fecha: new Date('2026-05-10'), observacion: 'Falta justificada médica' },
+      { alumno_id: alumnoTomas._id, materia_id: mat2._id, tipo: 'sancion', valor: 'Llamado de atención', fecha: new Date('2026-06-03'), observacion: 'Uso reiterado de teléfono celular durante el desarrollo de la clase.' },
     ]);
   }
 

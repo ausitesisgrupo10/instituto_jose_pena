@@ -14,7 +14,7 @@ const router = Router();
 
 router.use(autenticarJWT);
 
-router.get('/kpi', autorizarRoles('Admin', 'Docente', 'No Docente'), obtenerEstadisticasKPI);
-router.get('/estadisticas', autorizarRoles('Admin', 'Docente', 'No Docente'), generarReporteEstadistico);
+router.get('/kpi', autorizarRoles('Admin', 'Director', 'Docente', 'No Docente'), obtenerEstadisticasKPI);
+router.get('/estadisticas', autorizarRoles('Admin', 'Director', 'Docente', 'No Docente'), generarReporteEstadistico);
 
 export default router;

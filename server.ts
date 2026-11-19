@@ -24,6 +24,7 @@ import docenteRoutes from './src/routes/docenteRoutes.ts';
 import noDocenteRoutes from './src/routes/noDocenteRoutes.ts';
 import tutorRoutes from './src/routes/tutorRoutes.ts';
 import eventoAcademicoRoutes from './src/routes/eventoAcademicoRoutes.ts';
+import directorRoutes from './src/routes/directorRoutes.ts';
 
 const PORT = 3000;
 const HOST = '0.0.0.0';
@@ -37,10 +38,26 @@ async function iniciarServidor() {
 
   // Middlewares globales
   app.use(cors());
-  app.use(express.json());
+  app.use(express.json({ limit: '10mb' }));
 
-  // Conexión a MongoDB / MongoMemoryServer y siembra de datos demo
-  await conectarBD();
+  // Conexión a MongoDB / MongoMemoryServer y siembra de datos demo en paralelo
+  // para no bloquear el enlace inmediato del puerto 3000 en el arranque del servidor.
+  const dbReadyPromise = conectarBD();
+
+  // Endpoint de salud (responde de inmediato para healthchecks)
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', institucion: 'Instituto José Peña', fecha: new Date().toISOString() });
+  });
+
+  // Asegurar que la BD y el seeding terminaron antes de atender rutas de negocio /api/*
+  app.use('/api', async (req, res, next) => {
+    try {
+      await dbReadyPromise;
+      next();
+    } catch (err) {
+      next(err);
+    }
+  });
 
   // Rutas REST de la API del Instituto José Peña
   app.use('/api/auth', authRoutes);
@@ -58,11 +75,7 @@ async function iniciarServidor() {
   app.use('/api/tutor', tutorRoutes);
   app.use('/api/eventos-academicos', eventoAcademicoRoutes);
   app.use('/api/calendario', eventoAcademicoRoutes);
-
-  // Endpoint de salud
-  app.get('/api/health', (req, res) => {
-    res.json({ status: 'ok', institucion: 'Instituto José Peña', fecha: new Date().toISOString() });
-  });
+  app.use('/api/director', directorRoutes);
 
   // Configuración de Vite / Servidor Estático
   if (process.env.NODE_ENV !== 'production') {

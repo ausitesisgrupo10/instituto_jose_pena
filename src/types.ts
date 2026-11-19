@@ -123,7 +123,7 @@ export interface IRegistroAcademico {
 export interface IAsistencia {
   _id: string;
   persona_id: string | IUser;
-  tipo_persona: 'Alumno' | 'Docente';
+  tipo_persona: 'Alumno' | 'Docente' | 'No Docente';
   fecha: string;
   estado: 'Presente' | 'Ausente';
   comentario?: string;
@@ -133,14 +133,16 @@ export interface IAsistencia {
 }
 
 /**
- * Interfaz para la Asistencia Docente cargada por el personal No Docente.
+ * Interfaz para la Asistencia Docente / No Docente y solicitudes de inasistencia.
  */
 export interface IAsistenciaDocente {
   _id: string;
   docente_id: string | IUser;
   fecha: string;
-  estado: 'Presente' | 'Ausente' | 'Licencia' | 'Tardanza';
+  estado: 'Presente' | 'Ausente' | 'Licencia' | 'Tardanza' | 'Pendiente' | 'Aprobada' | 'Desaprobada';
+  motivo?: string;
   observacion?: string;
+  motivo_rechazo?: string;
   createdAt?: string;
 }
 

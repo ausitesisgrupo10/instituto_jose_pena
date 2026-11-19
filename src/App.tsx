@@ -16,10 +16,12 @@ import { MateriasView } from './components/views/MateriasView.js';
 import { ParentescosView } from './components/views/ParentescosView.js';
 import { RegistrosView } from './components/views/RegistrosView.js';
 import { ReportesView } from './components/views/ReportesView.js';
+import { DirectorReportesView } from './components/views/DirectorReportesView.js';
 import { DocenteDashboardView } from './components/views/DocenteDashboardView.js';
 import { AsistenciasView } from './components/views/AsistenciasView.js';
 import { ConsultaPersonasView } from './components/views/ConsultaPersonasView.js';
 import { TutorBoletinView } from './components/views/TutorBoletinView.js';
+import { ManualGoogleDocsModal } from './components/ManualGoogleDocsModal.js';
 import { IUser } from './types.js';
 
 export default function App() {
@@ -28,6 +30,7 @@ export default function App() {
   const [currentTab, setCurrentTab] = useState<TabType>('inicio');
   const [cargandoSesion, setCargandoSesion] = useState(true);
   const [loginError, setLoginError] = useState('');
+  const [isManualModalOpen, setIsManualModalOpen] = useState(false);
 
   // Verificar la validez del token guardado al iniciar
   useEffect(() => {
@@ -116,6 +119,13 @@ export default function App() {
       if (tab === 'inicio') return 'Panel Docente';
       if (tab === 'inasistencias_docente') return 'Mis Inasistencias y Actas';
     }
+    if (usuario?.rol === 'Director') {
+      if (tab === 'inicio') return 'Inicio';
+      if (tab === 'reportes') return 'Reportes y Estadísticas';
+      if (tab === 'registros') return 'Calificaciones y Sanciones';
+      if (tab === 'consulta_personas') return 'Legajos';
+      if (tab === 'asistencias') return 'Control de Asistencias';
+    }
     switch (tab) {
       case 'inicio':
         return 'Inicio';
@@ -156,7 +166,7 @@ export default function App() {
       case 'inicio':
         return <InicioView usuario={usuario} onNavigate={setCurrentTab} />;
       case 'asistencias':
-        return <AsistenciasView />;
+        return <AsistenciasView usuario={usuario} />;
       case 'consulta_personas':
         return <ConsultaPersonasView />;
       case 'inasistencias_docente':
@@ -174,7 +184,11 @@ export default function App() {
       case 'registros':
         return <RegistrosView usuario={usuario} />;
       case 'reportes':
-        return <ReportesView usuario={usuario} />;
+        return usuario?.rol === 'Director' ? (
+          <DirectorReportesView usuario={usuario} />
+        ) : (
+          <ReportesView usuario={usuario} />
+        );
       default:
         return <InicioView usuario={usuario} onNavigate={setCurrentTab} />;
     }
@@ -204,9 +218,18 @@ export default function App() {
       />
 
       <div className="flex-1 flex flex-col min-w-0 min-h-screen overflow-y-auto">
-        <Header title={getTabTitle(currentTab)} />
+        <Header
+          title={getTabTitle(currentTab)}
+          usuario={usuario}
+          onOpenManualDocs={() => setIsManualModalOpen(true)}
+        />
         <main className="flex-1 pb-12">{renderCurrentView()}</main>
       </div>
+
+      <ManualGoogleDocsModal
+        isOpen={isManualModalOpen}
+        onClose={() => setIsManualModalOpen(false)}
+      />
     </div>
   );
 }

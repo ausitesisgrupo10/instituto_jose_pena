@@ -13,7 +13,7 @@ export interface IUserDocument extends Document {
   dni: string;
   nombre: string;
   apellido: string;
-  rol: 'Admin' | 'Docente' | 'No Docente' | 'Alumno' | 'Padre';
+  rol: 'Admin' | 'Director' | 'Docente' | 'No Docente' | 'Alumno' | 'Padre';
   permisos: string[];
   perfil_metadata: Record<string, any>;
   curso_id?: mongoose.Types.ObjectId | any;
@@ -50,7 +50,7 @@ const UserSchema = new Schema<IUserDocument>(
     rol: {
       type: String,
       required: [true, 'El rol es obligatorio.'],
-      enum: ['Admin', 'Docente', 'No Docente', 'Alumno', 'Padre'],
+      enum: ['Admin', 'Director', 'Docente', 'No Docente', 'Alumno', 'Padre'],
       default: 'Alumno',
     },
     permisos: {

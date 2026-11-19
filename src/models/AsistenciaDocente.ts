@@ -12,20 +12,28 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IAsistenciaDocenteDocument extends Document {
   docente_id: mongoose.Types.ObjectId;
   fecha: Date;
-  estado: 'Presente' | 'Ausente' | 'Licencia' | 'Tardanza';
+  estado: 'Presente' | 'Ausente' | 'Licencia' | 'Tardanza' | 'Pendiente' | 'Aprobada' | 'Desaprobada';
+  motivo?: string;
   observacion?: string;
+  motivo_rechazo?: string;
+  revisado_por?: mongoose.Types.ObjectId;
+  fecha_revision?: Date;
+  notificacion_leida?: boolean;
+  adjunto_nombre?: string;
+  adjunto_tipo?: string;
+  adjunto_data?: string;
 }
 
 /**
  * @esquema AsistenciaDocenteSchema
- * @descripción Control del cumplimiento de asistencia de profesores y maestras.
+ * @descripción Control del cumplimiento de asistencia y solicitudes de inasistencia de personal Docente y No Docente.
  */
 const AsistenciaDocenteSchema = new Schema<IAsistenciaDocenteDocument>(
   {
     docente_id: {
       type: Schema.Types.ObjectId,
       ref: 'User',
-      required: [true, 'El docente es obligatorio.'],
+      required: [true, 'El solicitante es obligatorio.'],
     },
     fecha: {
       type: Date,
@@ -34,10 +42,43 @@ const AsistenciaDocenteSchema = new Schema<IAsistenciaDocenteDocument>(
     estado: {
       type: String,
       required: [true, 'El estado de asistencia es obligatorio.'],
-      enum: ['Presente', 'Ausente', 'Licencia', 'Tardanza'],
+      enum: ['Presente', 'Ausente', 'Licencia', 'Tardanza', 'Pendiente', 'Aprobada', 'Desaprobada'],
       default: 'Presente',
     },
+    motivo: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     observacion: {
+      type: String,
+      default: '',
+    },
+    motivo_rechazo: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    revisado_por: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+    },
+    fecha_revision: {
+      type: Date,
+    },
+    notificacion_leida: {
+      type: Boolean,
+      default: false,
+    },
+    adjunto_nombre: {
+      type: String,
+      default: '',
+    },
+    adjunto_tipo: {
+      type: String,
+      default: '',
+    },
+    adjunto_data: {
       type: String,
       default: '',
     },

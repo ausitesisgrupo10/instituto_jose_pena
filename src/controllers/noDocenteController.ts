@@ -153,7 +153,7 @@ export async function consultarPersonasUnificado(req: AuthRequest, res: Response
     if (categoria && categoria !== 'todos') {
       filtro.rol = categoria;
     } else {
-      filtro.rol = { $in: ['Docente', 'Alumno', 'Padre'] };
+      filtro.rol = { $in: ['Docente', 'No Docente', 'Alumno', 'Padre'] };
     }
 
     if (query && String(query).trim() !== '') {

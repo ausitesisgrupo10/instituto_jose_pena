@@ -20,7 +20,7 @@ router.use(autenticarJWT);
  * @ruta GET /api/usuarios
  * @descripción Obtiene la lista de usuarios. Accesible por Admin, Docente y No Docente.
  */
-router.get('/', autorizarRoles('Admin', 'Docente', 'No Docente'), listarUsuarios);
+router.get('/', autorizarRoles('Admin', 'Director', 'Docente', 'No Docente'), listarUsuarios);
 
 /**
  * @ruta POST /api/usuarios
