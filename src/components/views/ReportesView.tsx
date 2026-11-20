@@ -64,6 +64,9 @@ export const ReportesView: React.FC<ReportesViewProps> = ({ usuario }) => {
   const [busquedaDocente, setBusquedaDocente] = useState('');
   const [filtroEstadoDocente, setFiltroEstadoDocente] = useState<'Todos' | 'Presente' | 'Ausente' | 'Licencia' | 'Tardanza'>('Todos');
   const [filtroDocenteId, setFiltroDocenteId] = useState<string>('todos');
+  const [busquedaAplicada, setBusquedaAplicada] = useState('');
+  const [estadoAplicado, setEstadoAplicado] = useState<'Todos' | 'Presente' | 'Ausente' | 'Licencia' | 'Tardanza'>('Todos');
+  const [docenteAplicado, setDocenteAplicado] = useState<string>('todos');
 
   // Modal Carga Asistencia Docente
   const [isAsistenciaModalOpen, setIsAsistenciaModalOpen] = useState(false);
@@ -114,23 +117,30 @@ export const ReportesView: React.FC<ReportesViewProps> = ({ usuario }) => {
     fetchDatos();
   }, []);
 
-  // Filtrado reactivo de la tabla de asistencia docente
+  // Filtrado de la tabla de asistencia docente al ejecutar Buscar
+  const handleBuscarAsistencias = (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusquedaAplicada(busquedaDocente);
+    setEstadoAplicado(filtroEstadoDocente);
+    setDocenteAplicado(filtroDocenteId);
+  };
+
   const asistenciasFiltradas = useMemo(() => {
     return asistenciasDocentes.filter((item) => {
       // Filtro por Estado
-      if (filtroEstadoDocente !== 'Todos' && item.estado !== filtroEstadoDocente) {
+      if (estadoAplicado !== 'Todos' && item.estado !== estadoAplicado) {
         return false;
       }
 
       // Filtro por Docente ID
-      if (filtroDocenteId !== 'todos') {
+      if (docenteAplicado !== 'todos') {
         const idItem = typeof item.docente_id === 'object' ? item.docente_id?._id : item.docente_id;
-        if (idItem !== filtroDocenteId) return false;
+        if (idItem !== docenteAplicado) return false;
       }
 
       // Filtro por Texto libre (Nombre, Apellido, DNI, Observación)
-      if (busquedaDocente.trim() !== '') {
-        const query = busquedaDocente.toLowerCase();
+      if (busquedaAplicada.trim() !== '') {
+        const query = busquedaAplicada.toLowerCase();
         const doc = typeof item.docente_id === 'object' ? item.docente_id : null;
         const nombre = `${doc?.apellido || ''} ${doc?.nombre || ''}`.toLowerCase();
         const dni = (doc?.dni || '').toLowerCase();
@@ -143,7 +153,7 @@ export const ReportesView: React.FC<ReportesViewProps> = ({ usuario }) => {
 
       return true;
     });
-  }, [asistenciasDocentes, filtroEstadoDocente, filtroDocenteId, busquedaDocente]);
+  }, [asistenciasDocentes, estadoAplicado, docenteAplicado, busquedaAplicada]);
 
   // Manejo de Notificaciones
   const mostrarMensajeExito = (texto: string) => {
@@ -617,7 +627,10 @@ export const ReportesView: React.FC<ReportesViewProps> = ({ usuario }) => {
         </div>
 
         {/* Barra de Filtros interactiva */}
-        <div className="px-6 py-3.5 bg-slate-50/70 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-3">
+        <form
+          onSubmit={handleBuscarAsistencias}
+          className="px-6 py-3.5 bg-slate-50/70 border-b border-slate-200/80 flex flex-wrap items-center justify-between gap-3"
+        >
           <div className="flex flex-wrap items-center gap-2.5 w-full sm:w-auto">
             {/* Buscador libre */}
             <div className="relative min-w-[220px]">
@@ -663,6 +676,14 @@ export const ReportesView: React.FC<ReportesViewProps> = ({ usuario }) => {
                 ))}
               </select>
             </div>
+
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors cursor-pointer"
+            >
+              <Search className="w-3.5 h-3.5" />
+              <span>Buscar</span>
+            </button>
           </div>
 
           <div className="text-xs text-slate-500 font-medium flex items-center gap-2">
@@ -670,12 +691,21 @@ export const ReportesView: React.FC<ReportesViewProps> = ({ usuario }) => {
               Mostrando <strong className="text-slate-800">{asistenciasFiltradas.length}</strong> de{' '}
               {asistenciasDocentes.length} registros
             </span>
-            {(busquedaDocente || filtroEstadoDocente !== 'Todos' || filtroDocenteId !== 'todos') && (
+            {(busquedaDocente ||
+              filtroEstadoDocente !== 'Todos' ||
+              filtroDocenteId !== 'todos' ||
+              busquedaAplicada ||
+              estadoAplicado !== 'Todos' ||
+              docenteAplicado !== 'todos') && (
               <button
+                type="button"
                 onClick={() => {
                   setBusquedaDocente('');
                   setFiltroEstadoDocente('Todos');
                   setFiltroDocenteId('todos');
+                  setBusquedaAplicada('');
+                  setEstadoAplicado('Todos');
+                  setDocenteAplicado('todos');
                 }}
                 className="text-[11px] text-blue-600 hover:underline cursor-pointer"
               >
@@ -683,7 +713,7 @@ export const ReportesView: React.FC<ReportesViewProps> = ({ usuario }) => {
               </button>
             )}
           </div>
-        </div>
+        </form>
 
         {/* Tabla */}
         <div className="overflow-x-auto">

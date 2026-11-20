@@ -17,6 +17,15 @@ import {
   crearAlumnoAbm,
   actualizarAlumnoAbm,
   eliminarAlumnoAbm,
+  listarDocentesAbm,
+  crearDocenteAbm,
+  actualizarDocenteAbm,
+  eliminarDocenteAbm,
+  listarNoDocentesAbm,
+  crearNoDocenteAbm,
+  actualizarNoDocenteAbm,
+  eliminarNoDocenteAbm,
+  obtenerReportesMultifiltroNoDocente,
 } from '../controllers/noDocenteController.js';
 
 const router = Router();
@@ -35,6 +44,25 @@ router.get('/alumnos', autorizarRoles('No Docente', 'Admin', 'Director'), listar
 router.post('/alumnos', autorizarRoles('No Docente', 'Admin'), crearAlumnoAbm);
 router.put('/alumnos/:id', autorizarRoles('No Docente', 'Admin'), actualizarAlumnoAbm);
 router.delete('/alumnos/:id', autorizarRoles('No Docente', 'Admin'), eliminarAlumnoAbm);
+
+// ABM de Docentes (Alta y Modificación: No Docente / Director / Admin; Baja / Inactivación: EXCLUSIVO Director)
+router.get('/docentes', autorizarRoles('No Docente', 'Director', 'Admin'), listarDocentesAbm);
+router.post('/docentes', autorizarRoles('No Docente', 'Director', 'Admin'), crearDocenteAbm);
+router.put('/docentes/:id', autorizarRoles('No Docente', 'Director', 'Admin'), actualizarDocenteAbm);
+router.delete('/docentes/:id', autorizarRoles('Director'), eliminarDocenteAbm);
+
+// ABM de No Docentes (Alta y Modificación: No Docente / Director / Admin; Baja / Inactivación: EXCLUSIVO Director)
+router.get('/no-docentes', autorizarRoles('No Docente', 'Director', 'Admin'), listarNoDocentesAbm);
+router.post('/no-docentes', autorizarRoles('No Docente', 'Director', 'Admin'), crearNoDocenteAbm);
+router.put('/no-docentes/:id', autorizarRoles('No Docente', 'Director', 'Admin'), actualizarNoDocenteAbm);
+router.delete('/no-docentes/:id', autorizarRoles('Director'), eliminarNoDocenteAbm);
+
+// Reportes Multifiltro y Exportación Consolidada (.xls) para No Docente
+router.get(
+  '/reportes-consolidados',
+  autorizarRoles('No Docente', 'Admin', 'Director'),
+  obtenerReportesMultifiltroNoDocente
+);
 
 // Consulta Unificada de Personas
 router.get('/personas', consultarPersonasUnificado);

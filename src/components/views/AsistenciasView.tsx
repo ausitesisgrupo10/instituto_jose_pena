@@ -470,10 +470,10 @@ export const AsistenciasView: React.FC<AsistenciasViewProps> = ({ usuario }) => 
               onChange={(e) => setFiltroTipoPersona(e.target.value)}
               className="px-3 py-2 border border-slate-300 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#1b2a4a]/20"
             >
-              <option value="todos">Todos los Roles (Alumnos, Docentes y No Docentes)</option>
-              <option value="Alumno">Alumnos</option>
+              <option value="todos">Visualizar asistencia</option>
+              <option value="Alumno">Estudiantes</option>
+              <option value="No Docente">No docentes</option>
               <option value="Docente">Docentes</option>
-              <option value="No Docente">No Docentes</option>
             </select>
 
             <button

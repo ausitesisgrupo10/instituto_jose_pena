@@ -330,7 +330,7 @@ export async function buscarRegistrosDocente(req: AuthRequest, res: Response): P
 
     const [alumnos, todasSecciones, todosCursos] = await Promise.all([
       User.find({ rol: 'Alumno' })
-        .select('_id dni nombre apellido turno curso_id seccion_id perfil_metadata')
+        .select('_id dni nombre apellido rol estado turno curso_id seccion_id perfil_metadata')
         .populate('curso_id', 'nombre_curso nivel')
         .populate({
           path: 'seccion_id',
@@ -353,11 +353,12 @@ export async function buscarRegistrosDocente(req: AuthRequest, res: Response): P
 
     const resultados = alumnos
       .map((al: any) => {
-        const metaSeccion = al.perfil_metadata?.seccion_id
-          ? mapaSecciones.get(String(al.perfil_metadata.seccion_id))
+        const meta = al.perfil_metadata || {};
+        const metaSeccion = meta.seccion_id
+          ? mapaSecciones.get(String(meta.seccion_id))
           : null;
-        const metaCurso = al.perfil_metadata?.curso_id
-          ? mapaCursos.get(String(al.perfil_metadata.curso_id))
+        const metaCurso = meta.curso_id
+          ? mapaCursos.get(String(meta.curso_id))
           : null;
 
         const cursoNombre =
@@ -365,20 +366,20 @@ export async function buscarRegistrosDocente(req: AuthRequest, res: Response): P
           al.seccion_id?.curso_id?.nombre_curso ||
           metaCurso?.nombre_curso ||
           metaSeccion?.curso_id?.nombre_curso ||
-          al.perfil_metadata?.curso ||
+          meta.curso ||
           'Sin curso';
 
         const divisionNombre =
           al.seccion_id?.nombre_seccion ||
           metaSeccion?.nombre_seccion ||
-          al.perfil_metadata?.seccion ||
+          meta.seccion ||
           'Sin división';
 
         const turnoValor =
           al.turno ||
           al.seccion_id?.turno ||
           metaSeccion?.turno ||
-          al.perfil_metadata?.turno ||
+          meta.turno ||
           'Sin turno';
 
         return {
@@ -386,9 +387,25 @@ export async function buscarRegistrosDocente(req: AuthRequest, res: Response): P
           dni: al.dni || '',
           apellido: al.apellido || '',
           nombre: al.nombre || '',
+          rol: al.rol || 'Alumno',
+          estado: al.estado || 'Activo',
+          fecha_nacimiento: meta.fecha_nacimiento || '',
           curso: cursoNombre,
           division: divisionNombre,
           turno: turnoValor,
+          direccion: meta.direccion || '',
+          barrio: meta.barrio || '',
+          localidad: meta.localidad || '',
+          provincia: meta.provincia || '',
+          contacto: meta.contacto || meta.telefono || '',
+          promedio_general:
+            meta.promedio_general !== undefined && meta.promedio_general !== null && meta.promedio_general !== ''
+              ? Number(meta.promedio_general)
+              : '',
+          sanciones:
+            meta.sanciones !== undefined && meta.sanciones !== null && meta.sanciones !== ''
+              ? Number(meta.sanciones)
+              : 0,
         };
       })
       .filter((item) => {

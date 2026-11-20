@@ -17,6 +17,7 @@ import {
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { IUser } from '../../types.js';
+import { NoDocenteReportesView } from './NoDocenteReportesView.js';
 
 interface DirectorReportesViewProps {
   usuario: IUser | null;
@@ -415,6 +416,9 @@ export const DirectorReportesView: React.FC<DirectorReportesViewProps> = ({ usua
           </div>
         </div>
       </section>
+
+      {/* 4. Módulo de Exportación Multifiltro (.xls) por Rol, Cargo, Legajo, DNI y Turno */}
+      <NoDocenteReportesView sinContenedor />
     </div>
   );
 };

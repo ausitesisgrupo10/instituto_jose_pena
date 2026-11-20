@@ -11,10 +11,8 @@ import {
   UserCheck,
   CheckCircle2,
   Plus,
-  Calendar,
 } from 'lucide-react';
 import { IUser } from '../../types.js';
-import { CalendarioAcademico } from '../CalendarioAcademico.js';
 
 interface DirectorDashboardViewProps {
   usuario: IUser | null;
@@ -35,7 +33,6 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
 }) => {
   const [resumen, setResumen] = useState<ResumenDirectivo | null>(null);
   const [cargando, setCargando] = useState(true);
-  const [mostrarCalendario, setMostrarCalendario] = useState(false);
 
   useEffect(() => {
     const cargarResumen = async () => {
@@ -189,42 +186,6 @@ export const DirectorDashboardView: React.FC<DirectorDashboardViewProps> = ({
             );
           })}
         </div>
-      </section>
-
-      {/* 4. Calendario Académico con Interruptor "Ver Calendario" */}
-      <section className="space-y-4">
-        <div className="bg-white rounded-2xl px-6 py-4 border border-slate-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <Calendar className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
-            <div>
-              <h4 className="font-bold text-base text-[#1b2a4a]">Calendario Académico</h4>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Explora y planifica las fechas clave del año lectivo: exámenes, jornadas y reuniones de tutores.
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            role="switch"
-            aria-checked={mostrarCalendario}
-            onClick={() => setMostrarCalendario((prev) => !prev)}
-            className="inline-flex items-center gap-3 px-3.5 py-2 rounded-full bg-slate-100 hover:bg-slate-200/80 border border-slate-200 transition-colors cursor-pointer shrink-0 self-start sm:self-center"
-          >
-            <span className="text-xs font-bold text-[#1b2a4a]">Ver Calendario</span>
-            <span
-              className={`w-10 h-5.5 rounded-full p-0.5 transition-colors flex items-center ${
-                mostrarCalendario ? 'bg-[#1b2a4a] justify-end' : 'bg-slate-300 justify-start'
-              }`}
-            >
-              <span className="w-4.5 h-4.5 rounded-full bg-white shadow-xs block" />
-            </span>
-          </button>
-        </div>
-
-        {mostrarCalendario && (
-          <CalendarioAcademico usuario={usuario} onNavigateToSection={onNavigate} />
-        )}
       </section>
     </div>
   );

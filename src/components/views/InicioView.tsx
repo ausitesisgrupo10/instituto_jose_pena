@@ -4,13 +4,13 @@
  * accesos rápidos y el componente interactivo de Calendario Académico Institucional (exámenes, reuniones, actos).
  */
 
-import React, { useEffect, useState } from 'react';
-import { Calendar, BookOpen, ArrowRight } from 'lucide-react';
-import { IDashboardStats, IUser } from '../../types.js';
+import React from 'react';
+import { ArrowRight } from 'lucide-react';
+import { IUser } from '../../types.js';
 import { AlumnoDashboardView } from './AlumnoDashboardView.js';
 import { DocenteDashboardView } from './DocenteDashboardView.js';
 import { DirectorDashboardView } from './DirectorDashboardView.js';
-import { CalendarioAcademico } from '../CalendarioAcademico.js';
+import { DocenteMultifiltroRegistros } from '../DocenteMultifiltroRegistros.js';
 
 interface InicioViewProps {
   usuario: IUser | null;
@@ -18,74 +18,9 @@ interface InicioViewProps {
 }
 
 export const InicioView: React.FC<InicioViewProps> = ({ usuario, onNavigate }) => {
-  const [stats, setStats] = useState<IDashboardStats | null>(null);
-  const [cargando, setCargando] = useState(true);
-  const [subTabRol, setSubTabRol] = useState<'panel' | 'calendario'>('panel');
-
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const token = localStorage.getItem('token');
-        const res = await fetch('/api/reportes/kpi', {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setStats(data);
-        }
-      } catch (err) {
-        console.error('Error al obtener KPIs:', err);
-      } finally {
-        setCargando(false);
-      }
-    };
-
-    fetchStats();
-  }, []);
-
-  // Si el usuario es Alumno, permitimos alternar entre su Boletín personalizado y el Calendario Académico de Exámenes
+  // Si el usuario es Alumno, renderizamos directamente su Boletín personalizado
   if (usuario?.rol === 'Alumno') {
-    return (
-      <div className="space-y-6">
-        {/* Barra superior de pestañas para Alumnos */}
-        <div className="max-w-7xl mx-auto px-6 pt-6">
-          <div className="bg-white p-1.5 rounded-2xl border border-slate-200/90 shadow-2xs inline-flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setSubTabRol('panel')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                subTabRol === 'panel'
-                  ? 'bg-[#582EEF] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <BookOpen className="w-4 h-4" />
-              <span>Mi Boletín y Calificaciones</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setSubTabRol('calendario')}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                subTabRol === 'calendario'
-                  ? 'bg-[#582EEF] text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-              }`}
-            >
-              <Calendar className="w-4 h-4" />
-              <span>Calendario Académico y Fechas de Exámenes</span>
-            </button>
-          </div>
-        </div>
-
-        {subTabRol === 'panel' ? (
-          <AlumnoDashboardView usuario={usuario} />
-        ) : (
-          <div className="max-w-7xl mx-auto px-6 pb-12">
-            <CalendarioAcademico usuario={usuario} onNavigateToSection={onNavigate} />
-          </div>
-        )}
-      </div>
-    );
+    return <AlumnoDashboardView usuario={usuario} />;
   }
 
   // Si el usuario es Docente, renderizamos directamente su Panel Docente principal
@@ -97,52 +32,6 @@ export const InicioView: React.FC<InicioViewProps> = ({ usuario, onNavigate }) =
   if (usuario?.rol === 'Director') {
     return <DirectorDashboardView usuario={usuario} onNavigate={onNavigate} />;
   }
-
-  // Tarjetas KPI institucionales para Administradores, No Docentes y personal general
-  const kpiCards = [
-    {
-      title: 'Usuarios Totales',
-      val: stats?.totalUsuarios ?? 0,
-      bg: 'bg-white border-slate-200 text-slate-800',
-      badgeBg: 'bg-[#e2d9f3] text-[#593196]',
-      route: 'usuarios',
-    },
-    {
-      title: 'Alumnos Matriculados',
-      val: stats?.totalAlumnos ?? 0,
-      bg: 'bg-white border-slate-200 text-slate-800',
-      badgeBg: 'bg-[#582EEF]/10 text-[#582EEF] border border-[#582EEF]/20',
-      route: 'usuarios',
-    },
-    {
-      title: 'Cuerpo Docente',
-      val: stats?.totalDocentes ?? 0,
-      bg: 'bg-white border-slate-200 text-slate-800',
-      badgeBg: 'bg-blue-100 text-blue-800',
-      route: 'usuarios',
-    },
-    {
-      title: 'Padres / Tutores',
-      val: stats?.totalPadres ?? 0,
-      bg: 'bg-white border-slate-200 text-slate-800',
-      badgeBg: 'bg-amber-100 text-amber-800',
-      route: 'parentescos',
-    },
-    {
-      title: 'Personal No Docente',
-      val: stats?.totalNoDocentes ?? 0,
-      bg: 'bg-white border-slate-200 text-slate-800',
-      badgeBg: 'bg-slate-100 text-slate-700',
-      route: 'usuarios',
-    },
-    {
-      title: 'Materias Curriculares',
-      val: stats?.totalMaterias ?? 0,
-      bg: 'bg-white border-slate-200 text-slate-800',
-      badgeBg: 'bg-purple-100 text-purple-800',
-      route: 'materias',
-    },
-  ];
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-8 font-sans">
@@ -170,54 +59,10 @@ export const InicioView: React.FC<InicioViewProps> = ({ usuario, onNavigate }) =
         </div>
       </div>
 
-      {/* Tarjetas KPI Resumidas */}
-      <div>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-base font-bold text-[#1b2a4a]">Resumen General de la Institución</h3>
-          <span className="text-xs text-slate-500">Datos consolidados en tiempo real</span>
-        </div>
-
-        {cargando ? (
-          <div className="p-8 text-center text-slate-400 text-sm bg-white rounded-xl border border-slate-200">
-            Cargando indicadores...
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-            {kpiCards.map((kpi, idx) => (
-              <div
-                key={idx}
-                onClick={() => onNavigate(kpi.route)}
-                className={`p-6 rounded-2xl border shadow-2xs cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 ${kpi.bg}`}
-              >
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-500">{kpi.title}</p>
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${kpi.badgeBg}`}>
-                    Activos
-                  </span>
-                </div>
-                <p className="text-3xl font-black mt-3 tracking-tight text-[#1b2a4a]">{kpi.val}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ================= COMPONENTE DE CALENDARIO ACADÉMICO INTERACTIVO ================= */}
-      <section className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div>
-            <h3 className="text-lg font-bold text-[#1b2a4a] flex items-center gap-2">
-              <Calendar className="w-5 h-5 text-amber-500" />
-              <span>Cronograma & Calendario Académico</span>
-            </h3>
-            <p className="text-xs text-slate-500">
-              Explora y planifica las fechas clave del año lectivo: exámenes, jornadas y reuniones de tutores.
-            </p>
-          </div>
-        </div>
-
-        <CalendarioAcademico usuario={usuario} onNavigateToSection={onNavigate} />
-      </section>
+      {/* Buscador Multifiltro de Registros con Descarga Excel (.xls) para el perfil No Docente */}
+      {usuario?.rol === 'No Docente' && (
+        <DocenteMultifiltroRegistros mostrarDescargasExcel={true} />
+      )}
 
       {/* Secciones Rápidas / Atajos e Información Institucional */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

@@ -22,6 +22,8 @@ import { RegistroAcademico } from '../models/RegistroAcademico.js';
 import { Asistencia } from '../models/Asistencia.js';
 import { AsistenciaDocente } from '../models/AsistenciaDocente.js';
 import { estudiantesPdfDataset } from './estudiantesPdfDataset.js';
+import { docentesPdfDataset } from './docentesPdfDataset.js';
+import { noDocentesPdfDataset } from './noDocentesPdfDataset.js';
 
 // Dataset crudo suministrado
 export const rawDataset = {
@@ -122,6 +124,202 @@ function extraerDni(texto: string): string {
   const numeros = texto.match(/[0-9]{7,9}/);
   return numeros ? numeros[0] : '';
 }
+
+export const DATOS_PERSONAL_POR_DNI: Record<
+  string,
+  {
+    legajo: string;
+    cargo: string;
+    asignatura: string;
+    turno: string;
+    telefono: string;
+    direccion: string;
+    ciudad: string;
+    fecha_inicio: string;
+    fecha_fin: string;
+  }
+> = {
+  // Director
+  '20123456': {
+    legajo: 'DIR-3456',
+    cargo: 'Directivo',
+    asignatura: 'Dirección General',
+    turno: 'Mañana',
+    telefono: '351-410-0001',
+    direccion: 'Av. General Paz 150',
+    ciudad: 'Córdoba',
+    fecha_inicio: '2016-03-01',
+    fecha_fin: '',
+  },
+  // Administradores
+  '28456123': {
+    legajo: 'ADM-6123',
+    cargo: 'Directivo',
+    asignatura: 'Gestión de Sistemas',
+    turno: 'Mañana',
+    telefono: '351-410-0101',
+    direccion: 'Calle Rosario de Santa Fe 240',
+    ciudad: 'Córdoba',
+    fecha_inicio: '2019-03-01',
+    fecha_fin: '',
+  },
+  '29876543': {
+    legajo: 'ADM-6543',
+    cargo: 'Secretaría',
+    asignatura: 'Gestión Académica',
+    turno: 'Tarde',
+    telefono: '351-410-0102',
+    direccion: 'Av. Olmos 380',
+    ciudad: 'Córdoba',
+    fecha_inicio: '2020-02-15',
+    fecha_fin: '',
+  },
+  '27345678': {
+    legajo: 'ADM-5678',
+    cargo: 'Directivo',
+    asignatura: 'Gestión Administrativa',
+    turno: 'Mañana',
+    telefono: '351-410-0103',
+    direccion: 'Calle Tucumán 510',
+    ciudad: 'Córdoba',
+    fecha_inicio: '2018-05-01',
+    fecha_fin: '',
+  },
+  '30123456': {
+    legajo: 'ADM-3456',
+    cargo: 'Secretaría',
+    asignatura: 'Gestión Institucional',
+    turno: 'Tarde',
+    telefono: '351-410-0104',
+    direccion: 'Av. Emilio Caraffa 1120',
+    ciudad: 'Córdoba',
+    fecha_inicio: '2021-04-01',
+    fecha_fin: '',
+  },
+  '31987654': {
+    legajo: 'ADM-7654',
+    cargo: 'Secretaría',
+    asignatura: 'Soporte Institucional',
+    turno: 'Noche',
+    telefono: '351-410-0105',
+    direccion: 'Calle Santa Rosa 840',
+    ciudad: 'Córdoba',
+    fecha_inicio: '2022-03-01',
+    fecha_fin: '',
+  },
+  // Docentes
+  '32456789': {
+    legajo: 'DOC-6789',
+    cargo: 'Docente',
+    asignatura: 'Matemática I',
+    turno: 'Mañana',
+    telefono: '351-421-3001',
+    direccion: 'Av. Hipólito Yrigoyen 450',
+    ciudad: 'Córdoba',
+    fecha_inicio: '2021-03-01',
+    fecha_fin: '',
+  },
+  '33567890': {
+    legajo: 'DOC-7890',
+    cargo: 'Docente',
+    asignatura: 'Lengua y Literatura',
+    turno: 'Mañana',
+    telefono: '351-421-3002',
+    direccion: 'Bv. San Juan 720',
+    ciudad: 'Córdoba',
+    fecha_inicio: '2020-03-01',
+    fecha_fin: '',
+  },
+  '34678901': {
+    legajo: 'DOC-8901',
+    cargo: 'Docente',
+    asignatura: 'Física II',
+    turno: 'Tarde',
+    telefono: '351-421-3003',
+    direccion: 'Calle Independencia 890',
+    ciudad: 'Córdoba',
+    fecha_inicio: '2022-03-01',
+    fecha_fin: '',
+  },
+  '35789012': {
+    legajo: 'DOC-9012',
+    cargo: 'Docente',
+    asignatura: 'Historia III',
+    turno: 'Mañana',
+    telefono: '351-421-3004',
+    direccion: 'Av. Vélez Sarsfield 1140',
+    ciudad: 'Córdoba',
+    fecha_inicio: '2019-03-01',
+    fecha_fin: '',
+  },
+  '36890123': {
+    legajo: 'DOC-0123',
+    cargo: 'Docente',
+    asignatura: 'Ciencias Naturales',
+    turno: 'Mañana',
+    telefono: '351-421-3005',
+    direccion: 'Calle Dean Funes 530',
+    ciudad: 'Córdoba',
+    fecha_inicio: '2023-03-01',
+    fecha_fin: '',
+  },
+  // No Docentes
+  '31234567': {
+    legajo: 'NOD-4567',
+    cargo: 'Preceptoría',
+    asignatura: 'Preceptoría Nivel Secundario',
+    turno: 'Mañana',
+    telefono: '351-432-1001',
+    direccion: 'Av. Colón 980',
+    ciudad: 'Córdoba',
+    fecha_inicio: '2020-02-15',
+    fecha_fin: '',
+  },
+  '32345678': {
+    legajo: 'NOD-5678',
+    cargo: 'Secretaría',
+    asignatura: 'Secretaría Institucional',
+    turno: 'Mañana',
+    telefono: '351-432-1002',
+    direccion: 'Calle Caseros 640',
+    ciudad: 'Córdoba',
+    fecha_inicio: '2018-04-01',
+    fecha_fin: '',
+  },
+  '33456789': {
+    legajo: 'NOD-6789',
+    cargo: 'Secretaría',
+    asignatura: 'Administración General',
+    turno: 'Tarde',
+    telefono: '351-432-1003',
+    direccion: 'Bv. Las Heras 310',
+    ciudad: 'Córdoba',
+    fecha_inicio: '2022-05-10',
+    fecha_fin: '',
+  },
+  '34567890': {
+    legajo: 'NOD-7890',
+    cargo: 'Preceptoría',
+    asignatura: 'Preceptoría Turno Tarde',
+    turno: 'Tarde',
+    telefono: '351-432-1004',
+    direccion: 'Calle Belgrano 415',
+    ciudad: 'Córdoba',
+    fecha_inicio: '2021-08-01',
+    fecha_fin: '',
+  },
+  '35678901': {
+    legajo: 'NOD-8901',
+    cargo: 'Directivo',
+    asignatura: 'Coordinación Directiva',
+    turno: 'Noche',
+    telefono: '351-432-1005',
+    direccion: 'Av. Pueyrredón 770',
+    ciudad: 'Córdoba',
+    fecha_inicio: '2019-06-01',
+    fecha_fin: '',
+  },
+};
 
 /**
  * Ejecuta el proceso de seeding en MongoDB utilizando Mongoose y bcrypt.
@@ -274,6 +472,7 @@ export async function sembrarDatasetCompleto(): Promise<void> {
         observacion_general: 'Sin observaciones generales registradas.',
       };
       perfilMetadata.legajo = `ALU-${u.dni.slice(-4)}`;
+      perfilMetadata.cargo = 'Estudiantes';
       perfilMetadata.turno = turnoFinal || 'Mañana';
       perfilMetadata.seccion_id = seccionId;
       perfilMetadata.curso_id = cursoId;
@@ -284,9 +483,53 @@ export async function sembrarDatasetCompleto(): Promise<void> {
       perfilMetadata.contacto = datosExtra.contacto;
       perfilMetadata.contacto_emergencia = datosExtra.contacto_emergencia;
       perfilMetadata.observacion_general = datosExtra.observacion_general;
-    } else if (rolNormalizado === 'Docente') {
-      perfilMetadata.legajo = `DOC-${u.dni.slice(-4)}`;
-      perfilMetadata.titulo = 'Profesor de Nivel Secundario';
+    } else if (rolNormalizado === 'Padre') {
+      perfilMetadata.legajo = `TUT-${u.dni.slice(-4)}`;
+      perfilMetadata.cargo = 'Padre/Tutor';
+      perfilMetadata.turno = 'Mañana';
+      turnoFinal = 'Mañana';
+    } else if (
+      rolNormalizado === 'Docente' ||
+      rolNormalizado === 'No Docente' ||
+      rolNormalizado === 'Director' ||
+      rolNormalizado === 'Admin'
+    ) {
+      const infoPersonal = DATOS_PERSONAL_POR_DNI[u.dni];
+      const prefijo =
+        rolNormalizado === 'Docente'
+          ? 'DOC'
+          : rolNormalizado === 'No Docente'
+            ? 'NOD'
+            : rolNormalizado === 'Director'
+              ? 'DIR'
+              : 'ADM';
+      const turnoPersonal = infoPersonal?.turno || 'Mañana';
+      turnoFinal = turnoPersonal;
+      perfilMetadata.legajo = infoPersonal?.legajo || `${prefijo}-${u.dni.slice(-4)}`;
+      perfilMetadata.cargo =
+        infoPersonal?.cargo ||
+        (rolNormalizado === 'Docente'
+          ? 'Docente'
+          : rolNormalizado === 'No Docente'
+            ? 'Secretaría'
+            : 'Directivo');
+      perfilMetadata.asignatura = infoPersonal?.asignatura || '';
+      perfilMetadata.turno = turnoPersonal;
+      perfilMetadata.telefono = infoPersonal?.telefono || '351-400-0000';
+      perfilMetadata.celular = infoPersonal?.telefono || '351-400-0000';
+      perfilMetadata.direccion = infoPersonal?.direccion || 'Av. Colón 500';
+      perfilMetadata.ciudad = infoPersonal?.ciudad || 'Córdoba';
+      perfilMetadata.localidad = infoPersonal?.ciudad || 'Córdoba';
+      perfilMetadata.fecha_inicio = infoPersonal?.fecha_inicio || '2024-03-01';
+      perfilMetadata.fecha_fin = infoPersonal?.fecha_fin || '';
+      if (rolNormalizado === 'Docente') {
+        perfilMetadata.titulo = 'Profesor de Nivel Secundario';
+        perfilMetadata.categoria = 'Titular';
+      }
+      if (rolNormalizado === 'No Docente') {
+        perfilMetadata.area_usuario = perfilMetadata.cargo;
+        perfilMetadata.cargo_sector = perfilMetadata.asignatura || 'Secretaría General';
+      }
     }
 
     // Verificar si el DNI ya fue insertado previamente (por ejemplo, si una persona tiene más de un rol)
@@ -355,6 +598,7 @@ export async function sembrarDatasetCompleto(): Promise<void> {
         email: `${emailBase}@josepena.edu.ar`,
         dni: est.dni,
         legajo: `ALU-${est.dni.slice(-4)}`,
+        cargo: 'Estudiantes',
         fecha_nacimiento: est.fecha_nacimiento,
         curso: cursoNombre,
         curso_numero: est.curso,
@@ -377,8 +621,87 @@ export async function sembrarDatasetCompleto(): Promise<void> {
     });
     mapaUsuarios.set(est.dni, alumnoPdfDoc);
   }
+  // 4c. Poblar los 30 docentes del archivo PDF oficial (Alta Masiva de 30 Profesores)
+  const docenteDefaultHash = await bcrypt.hash('Docente123!', SALT_ROUNDS);
+  for (const doc of docentesPdfDataset) {
+    if (mapaUsuarios.has(doc.dni)) continue;
+
+    const emailBase = `${doc.nombre}.${doc.apellido}.${doc.dni.slice(-3)}`
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9.]/g, '');
+
+    const docentePdfDoc = await User.create({
+      dni: doc.dni,
+      nombre: doc.nombre,
+      apellido: doc.apellido,
+      rol: 'Docente',
+      permisos: ['REGISTRAR_NOTAS', 'VER_ALUMNOS'],
+      curso_id: null,
+      seccion_id: null,
+      turno: doc.turno,
+      passwordHash: docenteDefaultHash,
+      estado: doc.estado,
+      perfil_metadata: {
+        email: `${emailBase}@josepena.edu.ar`,
+        dni: doc.dni,
+        legajo: doc.legajo,
+        cargo: 'Docente',
+        categoria: doc.categoria,
+        asignatura: doc.area_materia,
+        turno: doc.turno,
+        telefono: doc.telefono,
+        celular: doc.telefono,
+        direccion: doc.direccion,
+        ciudad: 'Córdoba',
+        localidad: 'Córdoba',
+        fecha_inicio: doc.fecha_inicio,
+        fecha_fin: doc.fecha_fin,
+        titulo: 'Profesor de Nivel Secundario',
+      },
+    });
+    mapaUsuarios.set(doc.dni, docentePdfDoc);
+  }
+  // 4d. Poblar los 30 usuarios No Docentes del archivo PDF oficial (Base_NoDocente_30_usuarios.pdf)
+  const noDocDefaultHash = await bcrypt.hash('NoDoc123!', SALT_ROUNDS);
+  for (const nd of noDocentesPdfDataset) {
+    if (mapaUsuarios.has(nd.dni)) continue;
+
+    const noDocPdfDoc = await User.create({
+      dni: nd.dni,
+      nombre: nd.nombre,
+      apellido: nd.apellido,
+      rol: 'No Docente',
+      permisos: ['ASISTENCIA', 'SANCIONES', 'PROGRAMAS'],
+      curso_id: null,
+      seccion_id: null,
+      turno: nd.turno,
+      passwordHash: noDocDefaultHash,
+      estado: nd.estado,
+      perfil_metadata: {
+        numero_orden: nd.numero,
+        email: nd.email,
+        dni: nd.dni,
+        legajo: `NOD-${String(nd.numero).padStart(4, '0')}`,
+        cargo: nd.area_usuario,
+        area_usuario: nd.area_usuario,
+        cargo_sector: nd.cargo_sector,
+        asignatura: nd.cargo_sector,
+        turno: nd.turno,
+        telefono: nd.telefono,
+        celular: nd.telefono,
+        direccion: 'Av. Colón 500',
+        ciudad: 'Córdoba',
+        localidad: 'Córdoba',
+        fecha_inicio: '2024-03-01',
+        fecha_fin: nd.estado === 'Inactivo' ? '2026-03-01' : '',
+      },
+    });
+    mapaUsuarios.set(nd.dni, noDocPdfDoc);
+  }
   console.log(
-    `✅ ${rawDataset.usuarios.length} usuarios base + ${estudiantesPdfDataset.length} alumnos del PDF insertados con bcrypt.`
+    `✅ ${rawDataset.usuarios.length} usuarios base + ${estudiantesPdfDataset.length} alumnos PDF + ${docentesPdfDataset.length} docentes PDF + ${noDocentesPdfDataset.length} no docentes PDF insertados con bcrypt.`
   );
 
   // 5. Poblar Materias y Vincular con Sección y Docente

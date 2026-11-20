@@ -17,12 +17,16 @@ import { ParentescosView } from './components/views/ParentescosView.js';
 import { RegistrosView } from './components/views/RegistrosView.js';
 import { ReportesView } from './components/views/ReportesView.js';
 import { DirectorReportesView } from './components/views/DirectorReportesView.js';
+import { NoDocenteReportesView } from './components/views/NoDocenteReportesView.js';
 import { DocenteDashboardView } from './components/views/DocenteDashboardView.js';
 import { AsistenciasView } from './components/views/AsistenciasView.js';
 import { ConsultaPersonasView } from './components/views/ConsultaPersonasView.js';
 import { AbmAlumnosView } from './components/views/AbmAlumnosView.js';
+import { AbmDocentesView } from './components/views/AbmDocentesView.js';
+import { AbmNoDocentesView } from './components/views/AbmNoDocentesView.js';
 import { TutorBoletinView } from './components/views/TutorBoletinView.js';
 import { ManualGoogleDocsModal } from './components/ManualGoogleDocsModal.js';
+import { CalendarioAcademico } from './components/CalendarioAcademico.js';
 import { IUser } from './types.js';
 
 export default function App() {
@@ -110,6 +114,9 @@ export default function App() {
 
   // Mapeo de títulos de encabezado según pestaña seleccionada
   const getTabTitle = (tab: TabType): string => {
+    if (tab === 'calendario') {
+      return 'Cronograma & Calendario Académico';
+    }
     if (usuario?.rol === 'Padre') {
       return 'Expediente del Estudiante (Boletín del Tutor)';
     }
@@ -126,6 +133,8 @@ export default function App() {
       if (tab === 'registros') return 'Calificaciones y Sanciones';
       if (tab === 'consulta_personas') return 'Legajos';
       if (tab === 'asistencias') return 'Control de Asistencias';
+      if (tab === 'abm_docentes') return 'ABM Docente';
+      if (tab === 'abm_no_docentes') return 'ABM No Docente';
     }
     switch (tab) {
       case 'inicio':
@@ -152,6 +161,10 @@ export default function App() {
         return 'Mis Inasistencias y Actas';
       case 'abm_alumnos':
         return 'ABM de Alumnos';
+      case 'abm_docentes':
+        return 'ABM Docente';
+      case 'abm_no_docentes':
+        return 'ABM No Docente';
       default:
         return 'Inicio';
     }
@@ -159,6 +172,13 @@ export default function App() {
 
   // Renderizar la vista correspondiente a la pestaña activa
   const renderCurrentView = () => {
+    if (currentTab === 'calendario') {
+      return (
+        <div className="p-6 md:p-8 max-w-7xl mx-auto">
+          <CalendarioAcademico usuario={usuario} onNavigateToSection={setCurrentTab} />
+        </div>
+      );
+    }
     if (usuario?.rol === 'Padre') {
       return <TutorBoletinView usuario={usuario} />;
     }
@@ -176,6 +196,10 @@ export default function App() {
         return <DocenteDashboardView usuario={usuario} tabInicial="inasistencias" />;
       case 'abm_alumnos':
         return <AbmAlumnosView />;
+      case 'abm_docentes':
+        return <AbmDocentesView usuario={usuario} />;
+      case 'abm_no_docentes':
+        return <AbmNoDocentesView usuario={usuario} />;
       case 'usuarios':
         return <UsuariosView />;
       case 'cursos':
@@ -189,11 +213,13 @@ export default function App() {
       case 'registros':
         return <RegistrosView usuario={usuario} />;
       case 'reportes':
-        return usuario?.rol === 'Director' ? (
-          <DirectorReportesView usuario={usuario} />
-        ) : (
-          <ReportesView usuario={usuario} />
-        );
+        if (usuario?.rol === 'Director') {
+          return <DirectorReportesView usuario={usuario} />;
+        }
+        if (usuario?.rol === 'No Docente') {
+          return <NoDocenteReportesView />;
+        }
+        return <ReportesView usuario={usuario} />;
       default:
         return <InicioView usuario={usuario} onNavigate={setCurrentTab} />;
     }

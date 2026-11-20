@@ -7,6 +7,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import * as XLSX from 'xlsx';
 import {
   Search,
   SlidersHorizontal,
@@ -23,6 +24,8 @@ import {
   AlertTriangle,
   MessageSquare,
   ChevronRight,
+  Download,
+  FileSpreadsheet,
 } from 'lucide-react';
 
 interface CursoOption {
@@ -48,9 +51,19 @@ interface RegistroResumen {
   dni: string;
   apellido: string;
   nombre: string;
+  rol?: string;
+  estado?: string;
+  fecha_nacimiento?: string;
   curso: string;
   division: string;
   turno: string;
+  direccion?: string;
+  barrio?: string;
+  localidad?: string;
+  provincia?: string;
+  contacto?: string;
+  promedio_general?: number | string;
+  sanciones?: number;
 }
 
 interface DetalleRegistroAlumno {
@@ -94,10 +107,12 @@ interface DetalleRegistroAlumno {
 
 interface DocenteMultifiltroRegistrosProps {
   refreshTrigger?: number;
+  mostrarDescargasExcel?: boolean;
 }
 
 export const DocenteMultifiltroRegistros: React.FC<DocenteMultifiltroRegistrosProps> = ({
   refreshTrigger = 0,
+  mostrarDescargasExcel = false,
 }) => {
   // Opciones de catálogos institucionales
   const [cursos, setCursos] = useState<CursoOption[]>([]);
@@ -114,6 +129,7 @@ export const DocenteMultifiltroRegistros: React.FC<DocenteMultifiltroRegistrosPr
   // Estados de resultados y carga
   const [resultados, setResultados] = useState<RegistroResumen[]>([]);
   const [buscando, setBuscando] = useState(false);
+  const [descargandoXls, setDescargandoXls] = useState<'todo' | 'filtrado' | null>(null);
   const [errorBusqueda, setErrorBusqueda] = useState<string | null>(null);
   const [busquedaRealizada, setBusquedaRealizada] = useState(false);
 
@@ -277,6 +293,105 @@ export const DocenteMultifiltroRegistros: React.FC<DocenteMultifiltroRegistrosPr
     (v) => v.trim() !== ''
   ).length;
 
+  // Exporta un arreglo de registros a formato Excel (.xls) con todos los campos de cada estudiante
+  const generarArchivoXls = (registrosExport: RegistroResumen[], nombreBase: string) => {
+    const filas = registrosExport.map((r) => ({
+      Nombre: r.nombre || '',
+      Apellido: r.apellido || '',
+      DNI: r.dni || '',
+      Rol: r.rol || 'Alumno',
+      Estado: r.estado || 'Activo',
+      'Fecha de Nacimiento': r.fecha_nacimiento || '',
+      Curso: r.curso || '',
+      División: r.division || '',
+      Turno: r.turno || '',
+      Dirección: r.direccion || '',
+      Barrio: r.barrio || '',
+      Localidad: r.localidad || '',
+      Provincia: r.provincia || '',
+      Contacto: r.contacto || '',
+      'Promedio General':
+        r.promedio_general !== undefined && r.promedio_general !== ''
+          ? Number(r.promedio_general).toFixed(2)
+          : '',
+      Sanciones: r.sanciones ?? 0,
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(filas);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Estudiantes');
+    const fechaHoy = new Date().toISOString().split('T')[0];
+    XLSX.writeFile(wb, `${nombreBase}_${fechaHoy}.xls`, { bookType: 'biff8' });
+  };
+
+  // Descargar TODO (todos los estudiantes registrados en la BD sin filtros)
+  const handleDescargarTodo = async () => {
+    setDescargandoXls('todo');
+    setErrorBusqueda(null);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch('/api/docentes/buscar-registros', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'No se pudieron obtener los registros para descargar.');
+      }
+      const data = await res.json();
+      const todos: RegistroResumen[] = Array.isArray(data.resultados) ? data.resultados : [];
+      if (todos.length === 0) {
+        setErrorBusqueda('No existen registros de estudiantes cargados para descargar.');
+        return;
+      }
+      generarArchivoXls(todos, 'Estudiantes_Todos');
+    } catch (err: any) {
+      setErrorBusqueda(err.message || 'Error al generar el archivo Excel (.xls).');
+    } finally {
+      setDescargandoXls(null);
+    }
+  };
+
+  // Descargar FILTRADO (solo lo seleccionado en el filtro; si no hay filtros, descarga todo por defecto)
+  const handleDescargarFiltrado = async () => {
+    setDescargandoXls('filtrado');
+    setErrorBusqueda(null);
+    try {
+      const token = localStorage.getItem('token');
+      const params = new URLSearchParams();
+      if (curso.trim()) params.append('curso', curso.trim());
+      if (division.trim()) params.append('division', division.trim());
+      if (turno.trim()) params.append('turno', turno.trim());
+      if (apellido.trim()) params.append('apellido', apellido.trim());
+      if (nombre.trim()) params.append('nombre', nombre.trim());
+      if (dni.trim()) params.append('dni', dni.trim());
+
+      const queryStr = params.toString();
+      const url = `/api/docentes/buscar-registros${queryStr ? `?${queryStr}` : ''}`;
+
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || 'No se pudieron obtener los registros filtrados.');
+      }
+      const data = await res.json();
+      const filtrados: RegistroResumen[] = Array.isArray(data.resultados) ? data.resultados : [];
+      if (filtrados.length === 0) {
+        setErrorBusqueda('No hay registros coincidentes con el filtro actual para descargar.');
+        return;
+      }
+      generarArchivoXls(
+        filtrados,
+        filtrosActivosCount > 0 ? 'Estudiantes_Filtrados' : 'Estudiantes_Todos'
+      );
+    } catch (err: any) {
+      setErrorBusqueda(err.message || 'Error al generar el archivo Excel (.xls).');
+    } finally {
+      setDescargandoXls(null);
+    }
+  };
+
   return (
     <>
       <section className="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
@@ -425,29 +540,70 @@ export const DocenteMultifiltroRegistros: React.FC<DocenteMultifiltroRegistrosPr
           </div>
 
           {/* Botones de Acción */}
-          <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
-            <button
-              type="button"
-              onClick={handleLimpiar}
-              disabled={buscando}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span>Limpiar filtros</span>
-            </button>
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pt-1">
+            {mostrarDescargasExcel ? (
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleDescargarTodo}
+                  disabled={buscando || descargandoXls !== null}
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-60"
+                >
+                  {descargandoXls === 'todo' ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <FileSpreadsheet className="w-3.5 h-3.5" />
+                  )}
+                  <span>{descargandoXls === 'todo' ? 'Descargando...' : 'Descargar todo'}</span>
+                </button>
 
-            <button
-              type="submit"
-              disabled={buscando}
-              className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-60"
-            >
-              {buscando ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Search className="w-3.5 h-3.5" />
-              )}
-              <span>{buscando ? 'Buscando...' : 'Buscar registros'}</span>
-            </button>
+                <button
+                  type="button"
+                  onClick={handleDescargarFiltrado}
+                  disabled={buscando || descargandoXls !== null}
+                  title={
+                    filtrosActivosCount > 0
+                      ? 'Descargar solo los registros coincidentes con los filtros seleccionados (.xls)'
+                      : 'Sin filtros seleccionados: descargará todos los registros por defecto (.xls)'
+                  }
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#1d3557] hover:bg-[#152741] text-white text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-60"
+                >
+                  {descargandoXls === 'filtrado' ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Download className="w-3.5 h-3.5" />
+                  )}
+                  <span>{descargandoXls === 'filtrado' ? 'Descargando...' : 'Descargar'}</span>
+                </button>
+              </div>
+            ) : (
+              <div />
+            )}
+
+            <div className="flex flex-wrap items-center gap-2.5">
+              <button
+                type="button"
+                onClick={handleLimpiar}
+                disabled={buscando}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Limpiar filtros</span>
+              </button>
+
+              <button
+                type="submit"
+                disabled={buscando}
+                className="inline-flex items-center gap-1.5 px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-60"
+              >
+                {buscando ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Search className="w-3.5 h-3.5" />
+                )}
+                <span>{buscando ? 'Buscando...' : 'Buscar registros'}</span>
+              </button>
+            </div>
           </div>
         </form>
 

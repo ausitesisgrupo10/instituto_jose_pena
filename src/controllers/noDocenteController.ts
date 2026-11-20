@@ -13,6 +13,7 @@ import { Materia } from '../models/Materia.js';
 import { Curso } from '../models/Curso.js';
 import { Seccion } from '../models/Seccion.js';
 import { RegistroDocente } from '../models/RegistroDocente.js';
+import { RegistroAcademico } from '../models/RegistroAcademico.js';
 
 /**
  * @función registrarAsistenciaDiaria
@@ -550,6 +551,965 @@ export async function eliminarAlumnoAbm(req: AuthRequest, res: Response): Promis
   } catch (error: any) {
     console.error('❌ Error al dar de baja alumno:', error);
     res.status(500).json({ error: 'Error al dar de baja el alumno.', detalle: error.message });
+  }
+}
+
+/**
+ * Formatea un documento User (Docente) con las columnas del módulo ABM Docente y sus materias vinculadas.
+ */
+function formatearDocenteAbm(u: any, materiasAsignadas: string[] = []) {
+  const meta = u.perfil_metadata || {};
+  const emailDefault = `${u.nombre || ''}.${u.apellido || ''}`
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9.]/g, '');
+
+  const areaMateria =
+    meta.asignatura ||
+    (materiasAsignadas.length > 0 ? materiasAsignadas.join(', ') : '');
+
+  return {
+    _id: String(u._id),
+    legajo: meta.legajo || `DOC-${String(u.dni || '').slice(-4)}`,
+    dni: u.dni || '',
+    apellido: u.apellido || '',
+    nombre: u.nombre || '',
+    area_materia: areaMateria,
+    categoria: (meta.categoria === 'Suplente' ? 'Suplente' : 'Titular') as 'Titular' | 'Suplente',
+    fecha_inicio: meta.fecha_inicio || '',
+    fecha_fin: meta.fecha_fin || '',
+    telefono: meta.telefono || meta.celular || meta.contacto || '',
+    direccion: meta.direccion || '',
+    ciudad: meta.ciudad || meta.localidad || 'Córdoba',
+    turno: u.turno || meta.turno || 'Mañana',
+    email: meta.email || (emailDefault ? `${emailDefault}@josepena.edu.ar` : ''),
+    cargo: meta.cargo || 'Docente',
+    estado: (u.estado || 'Activo') as 'Activo' | 'Inactivo',
+    materias_asignadas: materiasAsignadas,
+  };
+}
+
+/**
+ * @función listarDocentesAbm
+ * @descripción Lista todos los docentes registrados junto con sus materias vinculadas para ABM Docente.
+ */
+export async function listarDocentesAbm(_req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const [docentes, materias] = await Promise.all([
+      User.find({ rol: 'Docente' }).select('-passwordHash').sort({ 'perfil_metadata.legajo': 1, apellido: 1, nombre: 1 }),
+      Materia.find({}).populate({
+        path: 'seccion_id',
+        select: 'nombre_seccion turno',
+        populate: { path: 'curso_id', select: 'nombre_curso' },
+      }),
+    ]);
+
+    const mapaMaterias = new Map<string, string[]>();
+    for (const mat of materias as any[]) {
+      const docId = String(mat.docente_id || '');
+      if (!docId) continue;
+      if (!mapaMaterias.has(docId)) mapaMaterias.set(docId, []);
+      const cursoDesc = mat.seccion_id?.curso_id?.nombre_curso
+        ? ` (${mat.seccion_id.curso_id.nombre_curso} ${mat.seccion_id.nombre_seccion || ''})`
+        : '';
+      mapaMaterias.get(docId)!.push(`${mat.nombre_materia}${cursoDesc}`);
+    }
+
+    res.json(
+      docentes.map((d: any) => formatearDocenteAbm(d, mapaMaterias.get(String(d._id)) || []))
+    );
+  } catch (error: any) {
+    console.error('❌ Error al listar docentes ABM:', error);
+    res.status(500).json({ error: 'Error al listar docentes.', detalle: error.message });
+  }
+}
+
+/**
+ * @función crearDocenteAbm
+ * @descripción Da de alta un nuevo docente (roles autorizados: No Docente, Director y Admin).
+ * @reglaDeNegocio Solo el rol Director puede crear o establecer estado Inactivo; para No Docente siempre inicia Activo.
+ */
+export async function crearDocenteAbm(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const {
+      legajo,
+      dni,
+      apellido,
+      nombre,
+      area_materia,
+      categoria,
+      fecha_inicio,
+      fecha_fin,
+      telefono,
+      direccion,
+      turno,
+      email,
+      estado,
+    } = req.body;
+
+    if (
+      typeof nombre !== 'string' ||
+      typeof apellido !== 'string' ||
+      (typeof dni !== 'string' && typeof dni !== 'number') ||
+      !nombre.trim() ||
+      !apellido.trim() ||
+      !String(dni).trim()
+    ) {
+      res.status(400).json({ error: 'Apellido, Nombre y DNI son campos obligatorios.' });
+      return;
+    }
+
+    const dniLimpio = String(dni).replace(/\D/g, '').trim();
+    if (!dniLimpio || dniLimpio.length < 7) {
+      res.status(400).json({ error: 'Ingrese un DNI numérico válido (mínimo 7 dígitos).' });
+      return;
+    }
+
+    const existente = await User.findOne({ dni: dniLimpio });
+    if (existente) {
+      res.status(409).json({ error: `Ya existe un usuario registrado con el DNI ${dniLimpio}.` });
+      return;
+    }
+
+    const esDirector = req.usuario?.rol === 'Director';
+    if (estado === 'Inactivo' && !esDirector) {
+      res.status(403).json({
+        error: 'Solo el rol Directivo está autorizado para inactivar o dar de baja a un docente.',
+      });
+      return;
+    }
+
+    const legajoFinal =
+      typeof legajo === 'string' && legajo.trim()
+        ? legajo.trim().toUpperCase()
+        : `DOC-${dniLimpio.slice(-4)}`;
+
+    const categoriaFinal = categoria === 'Suplente' ? 'Suplente' : 'Titular';
+    const turnoFinal =
+      turno === 'Tarde' || turno === 'Noche' || turno === 'Mañana' ? turno : 'Mañana';
+    const areaFinal = typeof area_materia === 'string' ? area_materia.trim() : '';
+    const fechaInicioFinal =
+      typeof fecha_inicio === 'string' && fecha_inicio.trim()
+        ? fecha_inicio.trim()
+        : new Date().toISOString().split('T')[0];
+    const fechaFinFinal = typeof fecha_fin === 'string' ? fecha_fin.trim() : '';
+    const telFinal = typeof telefono === 'string' ? telefono.trim() : '';
+    const dirFinal = typeof direccion === 'string' ? direccion.trim() : '';
+
+    const emailBase = `${nombre}.${apellido}.${dniLimpio.slice(-3)}`
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9.]/g, '');
+    const emailFinal =
+      typeof email === 'string' && email.trim()
+        ? email.trim().toLowerCase()
+        : `${emailBase}@josepena.edu.ar`;
+
+    const passwordHash = await bcrypt.hash('Docente123!', 10);
+
+    const nuevoDocente = await User.create({
+      dni: dniLimpio,
+      nombre: nombre.trim(),
+      apellido: apellido.trim(),
+      rol: 'Docente',
+      estado: esDirector && estado === 'Inactivo' ? 'Inactivo' : 'Activo',
+      permisos: ['REGISTRAR_NOTAS', 'VER_ALUMNOS'],
+      curso_id: null,
+      seccion_id: null,
+      turno: turnoFinal,
+      passwordHash,
+      perfil_metadata: {
+        dni: dniLimpio,
+        legajo: legajoFinal,
+        cargo: 'Docente',
+        categoria: categoriaFinal,
+        asignatura: areaFinal,
+        fecha_inicio: fechaInicioFinal,
+        fecha_fin: fechaFinFinal,
+        telefono: telFinal,
+        celular: telFinal,
+        direccion: dirFinal,
+        ciudad: 'Córdoba',
+        localidad: 'Córdoba',
+        turno: turnoFinal,
+        email: emailFinal,
+        titulo: 'Profesor de Nivel Secundario',
+      },
+    });
+
+    res.status(201).json(formatearDocenteAbm(nuevoDocente, []));
+  } catch (error: any) {
+    console.error('❌ Error al crear docente ABM:', error);
+    res.status(500).json({ error: 'Error al registrar el docente.', detalle: error.message });
+  }
+}
+
+/**
+ * @función actualizarDocenteAbm
+ * @descripción Modifica los datos de un docente (roles: No Docente, Director, Admin).
+ * @reglaDeNegocio Solo el rol Director puede modificar el campo estado (inactivar o reactivar).
+ */
+export async function actualizarDocenteAbm(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const docente: any = await User.findOne({ _id: id, rol: 'Docente' });
+    if (!docente) {
+      res.status(404).json({ error: 'Docente no encontrado.' });
+      return;
+    }
+
+    const {
+      legajo,
+      dni,
+      apellido,
+      nombre,
+      area_materia,
+      categoria,
+      fecha_inicio,
+      fecha_fin,
+      telefono,
+      direccion,
+      turno,
+      email,
+      estado,
+    } = req.body;
+
+    const esDirector = req.usuario?.rol === 'Director';
+
+    // Control estricto en servidor: solo el Director puede inactivar/reactivar a un docente
+    if ((estado === 'Activo' || estado === 'Inactivo') && estado !== docente.estado) {
+      if (!esDirector) {
+        res.status(403).json({
+          error: 'Solo el rol Directivo está autorizado para inactivar o dar de baja a un docente.',
+        });
+        return;
+      }
+      docente.estado = estado;
+    }
+
+    if (dni !== undefined && String(dni).replace(/\D/g, '').trim() !== docente.dni) {
+      const dniNuevo = String(dni).replace(/\D/g, '').trim();
+      if (!dniNuevo || dniNuevo.length < 7) {
+        res.status(400).json({ error: 'Ingrese un DNI numérico válido (mínimo 7 dígitos).' });
+        return;
+      }
+      const duplicado = await User.findOne({ dni: dniNuevo, _id: { $ne: docente._id } });
+      if (duplicado) {
+        res.status(409).json({ error: `El DNI ${dniNuevo} ya pertenece a otro usuario.` });
+        return;
+      }
+      docente.dni = dniNuevo;
+    }
+
+    if (typeof nombre === 'string' && nombre.trim()) docente.nombre = nombre.trim();
+    if (typeof apellido === 'string' && apellido.trim()) docente.apellido = apellido.trim();
+    if (turno === 'Mañana' || turno === 'Tarde' || turno === 'Noche') {
+      docente.turno = turno;
+    }
+
+    const metaActual = { ...(docente.perfil_metadata || {}) };
+    metaActual.dni = docente.dni;
+    metaActual.cargo = 'Docente';
+    metaActual.ciudad = metaActual.ciudad || 'Córdoba';
+    metaActual.localidad = metaActual.localidad || 'Córdoba';
+    metaActual.turno = docente.turno || metaActual.turno || 'Mañana';
+
+    if (typeof legajo === 'string' && legajo.trim()) {
+      metaActual.legajo = legajo.trim().toUpperCase();
+    }
+    if (typeof area_materia === 'string') {
+      metaActual.asignatura = area_materia.trim();
+    }
+    if (categoria === 'Titular' || categoria === 'Suplente') {
+      metaActual.categoria = categoria;
+    }
+    if (typeof fecha_inicio === 'string') {
+      metaActual.fecha_inicio = fecha_inicio.trim();
+    }
+    if (typeof fecha_fin === 'string') {
+      metaActual.fecha_fin = fecha_fin.trim();
+    }
+    if (typeof telefono === 'string') {
+      metaActual.telefono = telefono.trim();
+      metaActual.celular = telefono.trim();
+    }
+    if (typeof direccion === 'string') {
+      metaActual.direccion = direccion.trim();
+    }
+    if (typeof email === 'string' && email.trim()) {
+      metaActual.email = email.trim().toLowerCase();
+    }
+
+    docente.perfil_metadata = metaActual;
+    docente.markModified('perfil_metadata');
+    await docente.save();
+
+    const materias = await Materia.find({ docente_id: docente._id }).populate({
+      path: 'seccion_id',
+      select: 'nombre_seccion',
+      populate: { path: 'curso_id', select: 'nombre_curso' },
+    });
+    const nombresMaterias = materias.map((m: any) =>
+      m.seccion_id?.curso_id?.nombre_curso
+        ? `${m.nombre_materia} (${m.seccion_id.curso_id.nombre_curso} ${m.seccion_id.nombre_seccion || ''})`
+        : m.nombre_materia
+    );
+
+    res.json(formatearDocenteAbm(docente, nombresMaterias));
+  } catch (error: any) {
+    console.error('❌ Error al modificar docente ABM:', error);
+    res.status(500).json({ error: 'Error al modificar los datos del docente.', detalle: error.message });
+  }
+}
+
+/**
+ * @función eliminarDocenteAbm
+ * @descripción Da de baja lógica (Inactivo) o elimina definitivamente (?modo=permanente) a un docente.
+ * @reglaDeNegocio Operación permitida EXCLUSIVAMENTE para el rol Directivo (Director).
+ */
+export async function eliminarDocenteAbm(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (req.usuario?.rol !== 'Director') {
+      res.status(403).json({
+        error: 'Solo el rol Directivo está autorizado para inactivar o dar de baja a un docente.',
+      });
+      return;
+    }
+
+    const { id } = req.params;
+    const { modo } = req.query;
+
+    const docente = await User.findOne({ _id: id, rol: 'Docente' });
+    if (!docente) {
+      res.status(404).json({ error: 'Docente no encontrado.' });
+      return;
+    }
+
+    if (modo === 'permanente') {
+      await User.findByIdAndDelete(id);
+      res.json({ mensaje: 'Docente eliminado definitivamente del sistema.' });
+      return;
+    }
+
+    docente.estado = 'Inactivo';
+    await docente.save();
+    res.json({ mensaje: 'Docente dado de baja (estado Inactivo).', estado: 'Inactivo' });
+  } catch (error: any) {
+    console.error('❌ Error al dar de baja docente:', error);
+    res.status(500).json({ error: 'Error al dar de baja el docente.', detalle: error.message });
+  }
+}
+
+/**
+ * Formatea un documento User (No Docente) con las columnas del archivo Base_NoDocente_30_usuarios.pdf.
+ */
+function formatearNoDocenteAbm(u: any, fallbackNumero = 0) {
+  const meta = u.perfil_metadata || {};
+  const emailDefault = `${u.nombre || ''}.${u.apellido || ''}`
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9.]/g, '');
+
+  return {
+    _id: String(u._id),
+    numero:
+      meta.numero_orden !== undefined && meta.numero_orden !== null && meta.numero_orden !== ''
+        ? Number(meta.numero_orden)
+        : fallbackNumero,
+    area_usuario: meta.area_usuario || meta.cargo || 'Secretaría',
+    cargo_sector: meta.cargo_sector || meta.asignatura || 'Administración General',
+    nombre: u.nombre || '',
+    apellido: u.apellido || '',
+    dni: u.dni || '',
+    telefono: meta.telefono || meta.celular || meta.contacto || '',
+    email: meta.email || (emailDefault ? `${emailDefault}@josepena.edu.ar` : ''),
+    estado: (u.estado || 'Activo') as 'Activo' | 'Inactivo',
+    turno: u.turno || meta.turno || 'Mañana',
+    legajo: meta.legajo || `NOD-${String(u.dni || '').slice(-4)}`,
+  };
+}
+
+/**
+ * @función listarNoDocentesAbm
+ * @descripción Lista todos los usuarios No Docentes ordenados por número de registro y apellido/nombre.
+ */
+export async function listarNoDocentesAbm(_req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const noDocentes = await User.find({ rol: 'No Docente' })
+      .select('-passwordHash')
+      .sort({ 'perfil_metadata.numero_orden': 1, apellido: 1, nombre: 1 });
+
+    // Numerar secuencialmente si algún usuario base previo no tenía numero_orden
+    let maxNum = noDocentes.reduce((max, u: any) => {
+      const n = Number(u.perfil_metadata?.numero_orden || 0);
+      return n > max ? n : max;
+    }, 0);
+
+    const formateados = noDocentes.map((u: any) => {
+      const tieneNumero =
+        u.perfil_metadata?.numero_orden !== undefined &&
+        u.perfil_metadata?.numero_orden !== null &&
+        u.perfil_metadata?.numero_orden !== '';
+      const num = tieneNumero ? Number(u.perfil_metadata.numero_orden) : ++maxNum;
+      return formatearNoDocenteAbm(u, num);
+    });
+
+    formateados.sort((a, b) => a.numero - b.numero);
+    res.json(formateados);
+  } catch (error: any) {
+    console.error('❌ Error al listar no docentes ABM:', error);
+    res.status(500).json({ error: 'Error al listar personal No Docente.', detalle: error.message });
+  }
+}
+
+/**
+ * @función crearNoDocenteAbm
+ * @descripción Da de alta un nuevo usuario No Docente (roles autorizados: No Docente, Director, Admin).
+ * @reglaDeNegocio Solo el rol Director puede establecer estado Inactivo; para No Docente siempre inicia Activo.
+ */
+export async function crearNoDocenteAbm(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const {
+      numero,
+      area_usuario,
+      cargo_sector,
+      nombre,
+      apellido,
+      dni,
+      telefono,
+      email,
+      estado,
+      turno,
+    } = req.body;
+
+    if (
+      typeof nombre !== 'string' ||
+      typeof apellido !== 'string' ||
+      (typeof dni !== 'string' && typeof dni !== 'number') ||
+      !nombre.trim() ||
+      !apellido.trim() ||
+      !String(dni).trim()
+    ) {
+      res.status(400).json({ error: 'Nombre, Apellido y DNI son campos obligatorios.' });
+      return;
+    }
+
+    const dniLimpio = String(dni).replace(/\D/g, '').trim();
+    if (!dniLimpio || dniLimpio.length < 7) {
+      res.status(400).json({ error: 'Ingrese un DNI numérico válido (mínimo 7 dígitos).' });
+      return;
+    }
+
+    const existente = await User.findOne({ dni: dniLimpio });
+    if (existente) {
+      res.status(409).json({ error: `Ya existe un usuario registrado con el DNI ${dniLimpio}.` });
+      return;
+    }
+
+    const esDirector = req.usuario?.rol === 'Director';
+    if (estado === 'Inactivo' && !esDirector) {
+      res.status(403).json({
+        error: 'Solo el rol Directivo está autorizado para inactivar o dar de baja a un usuario No Docente.',
+      });
+      return;
+    }
+
+    const existentesCount = await User.countDocuments({ rol: 'No Docente' });
+    const numeroFinal =
+      numero !== undefined && numero !== '' && !isNaN(Number(numero))
+        ? Math.max(1, parseInt(String(numero), 10))
+        : existentesCount + 1;
+
+    const areaFinal =
+      typeof area_usuario === 'string' && area_usuario.trim() ? area_usuario.trim() : 'Secretaría';
+    const sectorFinal =
+      typeof cargo_sector === 'string' && cargo_sector.trim()
+        ? cargo_sector.trim()
+        : 'Administración General';
+    const turnoFinal =
+      turno === 'Tarde' || turno === 'Noche' || turno === 'Mañana' ? turno : 'Mañana';
+    const telFinal = typeof telefono === 'string' ? telefono.trim() : '';
+
+    const emailBase = `${nombre}.${apellido}.${dniLimpio.slice(-2)}`
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9.]/g, '');
+    const emailFinal =
+      typeof email === 'string' && email.trim()
+        ? email.trim().toLowerCase()
+        : `${emailBase}@example.com`;
+
+    const passwordHash = await bcrypt.hash('NoDoc123!', 10);
+
+    const nuevoNoDocente = await User.create({
+      dni: dniLimpio,
+      nombre: nombre.trim(),
+      apellido: apellido.trim(),
+      rol: 'No Docente',
+      estado: esDirector && estado === 'Inactivo' ? 'Inactivo' : 'Activo',
+      permisos: ['ASISTENCIA', 'SANCIONES', 'PROGRAMAS'],
+      curso_id: null,
+      seccion_id: null,
+      turno: turnoFinal,
+      passwordHash,
+      perfil_metadata: {
+        numero_orden: numeroFinal,
+        dni: dniLimpio,
+        legajo: `NOD-${String(numeroFinal).padStart(4, '0')}`,
+        cargo: areaFinal,
+        area_usuario: areaFinal,
+        cargo_sector: sectorFinal,
+        asignatura: sectorFinal,
+        telefono: telFinal,
+        celular: telFinal,
+        email: emailFinal,
+        turno: turnoFinal,
+        direccion: 'Av. Colón 500',
+        ciudad: 'Córdoba',
+        localidad: 'Córdoba',
+        fecha_inicio: new Date().toISOString().split('T')[0],
+        fecha_fin: '',
+      },
+    });
+
+    res.status(201).json(formatearNoDocenteAbm(nuevoNoDocente, numeroFinal));
+  } catch (error: any) {
+    console.error('❌ Error al crear No Docente ABM:', error);
+    res.status(500).json({ error: 'Error al registrar el agente No Docente.', detalle: error.message });
+  }
+}
+
+/**
+ * @función actualizarNoDocenteAbm
+ * @descripción Modifica los datos de un usuario No Docente (roles: No Docente, Director, Admin).
+ * @reglaDeNegocio Solo el rol Director puede modificar el estado (inactivar / reactivar).
+ */
+export async function actualizarNoDocenteAbm(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+    const agente: any = await User.findOne({ _id: id, rol: 'No Docente' });
+    if (!agente) {
+      res.status(404).json({ error: 'Agente No Docente no encontrado.' });
+      return;
+    }
+
+    const {
+      numero,
+      area_usuario,
+      cargo_sector,
+      nombre,
+      apellido,
+      dni,
+      telefono,
+      email,
+      estado,
+      turno,
+    } = req.body;
+
+    const esDirector = req.usuario?.rol === 'Director';
+
+    if ((estado === 'Activo' || estado === 'Inactivo') && estado !== agente.estado) {
+      if (!esDirector) {
+        res.status(403).json({
+          error: 'Solo el rol Directivo está autorizado para inactivar o dar de baja a un usuario No Docente.',
+        });
+        return;
+      }
+      agente.estado = estado;
+    }
+
+    if (dni !== undefined && String(dni).replace(/\D/g, '').trim() !== agente.dni) {
+      const dniNuevo = String(dni).replace(/\D/g, '').trim();
+      if (!dniNuevo || dniNuevo.length < 7) {
+        res.status(400).json({ error: 'Ingrese un DNI numérico válido (mínimo 7 dígitos).' });
+        return;
+      }
+      const duplicado = await User.findOne({ dni: dniNuevo, _id: { $ne: agente._id } });
+      if (duplicado) {
+        res.status(409).json({ error: `El DNI ${dniNuevo} ya pertenece a otro usuario.` });
+        return;
+      }
+      agente.dni = dniNuevo;
+    }
+
+    if (typeof nombre === 'string' && nombre.trim()) agente.nombre = nombre.trim();
+    if (typeof apellido === 'string' && apellido.trim()) agente.apellido = apellido.trim();
+    if (turno === 'Mañana' || turno === 'Tarde' || turno === 'Noche') {
+      agente.turno = turno;
+    }
+
+    const metaActual = { ...(agente.perfil_metadata || {}) };
+    metaActual.dni = agente.dni;
+    metaActual.turno = agente.turno || metaActual.turno || 'Mañana';
+    metaActual.ciudad = metaActual.ciudad || 'Córdoba';
+    metaActual.localidad = metaActual.localidad || 'Córdoba';
+
+    if (numero !== undefined && numero !== '' && !isNaN(Number(numero))) {
+      metaActual.numero_orden = Math.max(1, parseInt(String(numero), 10));
+    }
+    if (typeof area_usuario === 'string' && area_usuario.trim()) {
+      metaActual.area_usuario = area_usuario.trim();
+      metaActual.cargo = area_usuario.trim();
+    }
+    if (typeof cargo_sector === 'string' && cargo_sector.trim()) {
+      metaActual.cargo_sector = cargo_sector.trim();
+      metaActual.asignatura = cargo_sector.trim();
+    }
+    if (typeof telefono === 'string') {
+      metaActual.telefono = telefono.trim();
+      metaActual.celular = telefono.trim();
+    }
+    if (typeof email === 'string' && email.trim()) {
+      metaActual.email = email.trim().toLowerCase();
+    }
+
+    agente.perfil_metadata = metaActual;
+    agente.markModified('perfil_metadata');
+    await agente.save();
+
+    res.json(formatearNoDocenteAbm(agente, Number(metaActual.numero_orden || 0)));
+  } catch (error: any) {
+    console.error('❌ Error al modificar No Docente ABM:', error);
+    res.status(500).json({ error: 'Error al modificar el agente No Docente.', detalle: error.message });
+  }
+}
+
+/**
+ * @función eliminarNoDocenteAbm
+ * @descripción Da de baja lógica (Inactivo) o elimina definitivamente (?modo=permanente) a un No Docente.
+ * @reglaDeNegocio Operación permitida EXCLUSIVAMENTE para el rol Directivo (Director).
+ */
+export async function eliminarNoDocenteAbm(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    if (req.usuario?.rol !== 'Director') {
+      res.status(403).json({
+        error: 'Solo el rol Directivo está autorizado para inactivar o dar de baja a un usuario No Docente.',
+      });
+      return;
+    }
+
+    const { id } = req.params;
+    const { modo } = req.query;
+
+    const agente = await User.findOne({ _id: id, rol: 'No Docente' });
+    if (!agente) {
+      res.status(404).json({ error: 'Agente No Docente no encontrado.' });
+      return;
+    }
+
+    if (modo === 'permanente') {
+      await User.findByIdAndDelete(id);
+      res.json({ mensaje: 'Agente No Docente eliminado definitivamente del sistema.' });
+      return;
+    }
+
+    agente.estado = 'Inactivo';
+    await agente.save();
+    res.json({ mensaje: 'Agente No Docente dado de baja (estado Inactivo).', estado: 'Inactivo' });
+  } catch (error: any) {
+    console.error('❌ Error al dar de baja No Docente:', error);
+    res.status(500).json({ error: 'Error al dar de baja el agente No Docente.', detalle: error.message });
+  }
+}
+
+function normalizarFiltroTexto(valor: unknown): string {
+  return String(valor || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * @función obtenerReportesMultifiltroNoDocente
+ * @descripción Devuelve todos los registros consolidados (Estudiantes, Docentes, No Docentes y personal institucional)
+ * filtrados por Rol, Cargo, Legajo, DNI y Turno para el módulo Reportes y Estadísticas del rol No Docente.
+ */
+export async function obtenerReportesMultifiltroNoDocente(
+  req: AuthRequest,
+  res: Response
+): Promise<void> {
+  try {
+    const { rol, cargo, legajo, dni, turno } = req.query;
+
+    const filtroRol = normalizarFiltroTexto(rol);
+    const filtroCargo = normalizarFiltroTexto(cargo);
+    const filtroLegajo = normalizarFiltroTexto(legajo);
+    const filtroDni = String(dni || '').replace(/\D/g, '').trim();
+    const filtroTurno = normalizarFiltroTexto(turno);
+
+    const [usuarios, materias, registrosAcad] = await Promise.all([
+      User.find({})
+        .select('-passwordHash')
+        .populate('curso_id', 'nombre_curso nivel')
+        .populate({
+          path: 'seccion_id',
+          select: 'nombre_seccion turno curso_id',
+          populate: { path: 'curso_id', select: 'nombre_curso nivel' },
+        })
+        .sort({ rol: 1, apellido: 1, nombre: 1 }),
+      Materia.find({}).populate('seccion_id', 'nombre_seccion turno'),
+      RegistroAcademico.find({ tipo: { $in: ['nota', 'sancion'] } }).select('alumno_id tipo valor'),
+    ]);
+
+    // Mapear materias por docente_id
+    const mapaMateriasDocente = new Map<string, { nombres: string[]; turnos: string[] }>();
+    for (const mat of materias as any[]) {
+      const docId = String(mat.docente_id || '');
+      if (!docId) continue;
+      if (!mapaMateriasDocente.has(docId)) {
+        mapaMateriasDocente.set(docId, { nombres: [], turnos: [] });
+      }
+      const entry = mapaMateriasDocente.get(docId)!;
+      if (mat.nombre_materia && !entry.nombres.includes(mat.nombre_materia)) {
+        entry.nombres.push(mat.nombre_materia);
+      }
+      const secTurno = mat.seccion_id?.turno;
+      if (secTurno && !entry.turnos.includes(secTurno)) {
+        entry.turnos.push(secTurno);
+      }
+    }
+
+    // Mapear notas y sanciones reales de RegistroAcademico por alumno_id
+    const mapaNotasAlumno = new Map<string, number[]>();
+    const mapaSancionesAlumno = new Map<string, number>();
+    for (const reg of registrosAcad as any[]) {
+      const alId = String(reg.alumno_id || '');
+      if (!alId) continue;
+      if (reg.tipo === 'nota') {
+        const val = parseFloat(String(reg.valor).replace(',', '.'));
+        if (!isNaN(val)) {
+          if (!mapaNotasAlumno.has(alId)) mapaNotasAlumno.set(alId, []);
+          mapaNotasAlumno.get(alId)!.push(val);
+        }
+      } else if (reg.tipo === 'sancion') {
+        mapaSancionesAlumno.set(alId, (mapaSancionesAlumno.get(alId) || 0) + 1);
+      }
+    }
+
+    const todosConsolidados = usuarios.map((u: any) => {
+      const meta = u.perfil_metadata || {};
+      const uid = String(u._id);
+      const emailDefault = `${u.nombre || ''}.${u.apellido || ''}`
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9.]/g, '');
+
+      if (u.rol === 'Alumno') {
+        const cursoNombre =
+          u.curso_id?.nombre_curso ||
+          u.seccion_id?.curso_id?.nombre_curso ||
+          meta.curso ||
+          '';
+        const cursoNum =
+          meta.curso_numero ||
+          (cursoNombre ? String(cursoNombre).replace(/[^\d]/g, '') : '');
+        const seccionNombre = u.seccion_id?.nombre_seccion || meta.seccion || '';
+        const divisionLetra =
+          meta.division ||
+          (seccionNombre ? String(seccionNombre).replace(/divisi[oó]n/i, '').trim() : '');
+        const turnoValor = u.turno || u.seccion_id?.turno || meta.turno || 'Mañana';
+
+        const notasReales = mapaNotasAlumno.get(uid) || [];
+        const promedioCalculado =
+          notasReales.length > 0
+            ? Number((notasReales.reduce((a, b) => a + b, 0) / notasReales.length).toFixed(2))
+            : null;
+        const promedioFinal =
+          meta.promedio_general !== undefined &&
+          meta.promedio_general !== null &&
+          meta.promedio_general !== ''
+            ? Number(meta.promedio_general)
+            : promedioCalculado ?? 0;
+
+        const sancionesFinal =
+          meta.sanciones !== undefined && meta.sanciones !== null && meta.sanciones !== ''
+            ? Number(meta.sanciones)
+            : mapaSancionesAlumno.get(uid) || 0;
+
+        return {
+          _id: uid,
+          legajo: meta.legajo || `ALU-${String(u.dni || '').slice(-4)}`,
+          dni: u.dni || '',
+          apellido: u.apellido || '',
+          nombre: u.nombre || '',
+          rol: 'Alumno',
+          rol_display: 'Estudiante',
+          cargo: meta.cargo || 'Estudiantes',
+          asignatura: cursoNum ? `${cursoNum}° Año ${divisionLetra}`.trim() : cursoNombre || '-',
+          turno: turnoValor,
+          telefono: meta.contacto || meta.telefono || '',
+          email: meta.email || (emailDefault ? `${emailDefault}@josepena.edu.ar` : ''),
+          direccion: meta.direccion || '',
+          ciudad: meta.localidad || meta.ciudad || 'Córdoba',
+          estado: u.estado || 'Activo',
+          fecha_inicio: u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : '',
+          fecha_fin: u.estado === 'Inactivo' && u.updatedAt ? new Date(u.updatedAt).toISOString().split('T')[0] : '',
+          // Campos específicos del esquema Estudiante
+          fecha_nacimiento: meta.fecha_nacimiento || '',
+          curso: cursoNum || cursoNombre || '',
+          division: divisionLetra || seccionNombre || '',
+          barrio: meta.barrio || '',
+          localidad: meta.localidad || meta.ciudad || '',
+          provincia: meta.provincia || '',
+          contacto: meta.contacto || meta.telefono || '',
+          promedio_general: promedioFinal,
+          sanciones: sancionesFinal,
+        };
+      }
+
+      // Personal: Docente, No Docente, Director, Admin, Padre
+      const matInfo = mapaMateriasDocente.get(uid);
+      const asignaturaDocente =
+        matInfo && matInfo.nombres.length > 0
+          ? matInfo.nombres.join(', ')
+          : meta.asignatura || (u.rol === 'No Docente' ? 'Gestión Administrativa' : '-');
+
+      const turnoPersonal =
+        u.turno ||
+        meta.turno ||
+        (matInfo && matInfo.turnos.length > 0 ? matInfo.turnos[0] : 'Mañana');
+
+      const prefijo =
+        u.rol === 'Docente'
+          ? 'DOC'
+          : u.rol === 'No Docente'
+            ? 'NOD'
+            : u.rol === 'Director'
+              ? 'DIR'
+              : u.rol === 'Admin'
+                ? 'ADM'
+                : 'TUT';
+
+      const cargoDefault =
+        u.rol === 'Docente'
+          ? 'Docente'
+          : u.rol === 'No Docente'
+            ? 'Secretaría'
+            : u.rol === 'Padre'
+              ? 'Padre/Tutor'
+              : 'Directivo';
+
+      return {
+        _id: uid,
+        legajo: meta.legajo || `${prefijo}-${String(u.dni || '').slice(-4)}`,
+        dni: u.dni || '',
+        apellido: u.apellido || '',
+        nombre: u.nombre || '',
+        rol: u.rol,
+        rol_display: u.rol,
+        cargo: meta.cargo || cargoDefault,
+        asignatura: asignaturaDocente,
+        turno: turnoPersonal,
+        telefono: meta.telefono || meta.celular || meta.contacto || '',
+        email: meta.email || (emailDefault ? `${emailDefault}@josepena.edu.ar` : ''),
+        direccion: meta.direccion || '',
+        ciudad: meta.ciudad || meta.localidad || 'Córdoba',
+        estado: u.estado || 'Activo',
+        fecha_inicio:
+          meta.fecha_inicio ||
+          (u.createdAt ? new Date(u.createdAt).toISOString().split('T')[0] : '2024-03-01'),
+        fecha_fin: meta.fecha_fin || '',
+        // Campos alumno vacíos por consistencia de tipo
+        fecha_nacimiento: '',
+        curso: '',
+        division: '',
+        barrio: '',
+        localidad: meta.ciudad || meta.localidad || '',
+        provincia: '',
+        contacto: meta.telefono || meta.celular || '',
+        promedio_general: '',
+        sanciones: 0,
+      };
+    });
+
+    // Extraer opciones dinámicas disponibles en la base de datos
+    const opcionesCargos = Array.from(
+      new Set(todosConsolidados.map((r) => r.cargo).filter((c) => Boolean(c && c.trim())))
+    ).sort((a, b) => a.localeCompare(b));
+
+    const opcionesTurnos = Array.from(
+      new Set(['Mañana', 'Tarde', 'Noche', ...todosConsolidados.map((r) => r.turno).filter(Boolean)])
+    );
+
+    const filtrados = todosConsolidados.filter((item) => {
+      if (filtroRol && filtroRol !== 'todos') {
+        const rolNorm = normalizarFiltroTexto(item.rol);
+        const rolBuscado =
+          filtroRol === 'estudiante' || filtroRol === 'estudiantes'
+            ? 'alumno'
+            : filtroRol === 'padre/tutor' || filtroRol === 'padres/tutores'
+              ? 'padre'
+              : filtroRol;
+        if (rolNorm !== rolBuscado) return false;
+      }
+      if (filtroCargo && filtroCargo !== 'todos') {
+        const cargoItemNorm = normalizarFiltroTexto(item.cargo);
+        const cargoBuscadoCompacto = filtroCargo.replace(/[^a-z0-9]/g, '');
+        const cargoItemCompacto = cargoItemNorm.replace(/[^a-z0-9]/g, '');
+
+        let coincideCargo =
+          cargoItemNorm.includes(filtroCargo) || cargoItemCompacto.includes(cargoBuscadoCompacto);
+
+        if (!coincideCargo) {
+          if (cargoBuscadoCompacto.includes('estudiante')) {
+            coincideCargo =
+              cargoItemCompacto.includes('estudiante') ||
+              normalizarFiltroTexto(item.rol) === 'alumno';
+          } else if (cargoBuscadoCompacto.includes('padre') || cargoBuscadoCompacto.includes('tutor')) {
+            coincideCargo =
+              cargoItemCompacto.includes('padre') ||
+              cargoItemCompacto.includes('tutor') ||
+              normalizarFiltroTexto(item.rol) === 'padre';
+          } else if (cargoBuscadoCompacto === 'docente') {
+            coincideCargo =
+              normalizarFiltroTexto(item.rol) === 'docente' ||
+              cargoItemNorm.includes('profesor');
+          } else if (cargoBuscadoCompacto === 'directivo') {
+            coincideCargo =
+              cargoItemNorm.includes('directiv') ||
+              cargoItemNorm.includes('director') ||
+              cargoItemNorm.includes('admin');
+          } else if (cargoBuscadoCompacto === 'secretaria') {
+            coincideCargo =
+              cargoItemNorm.includes('secretar') || cargoItemNorm.includes('auxiliar');
+          } else if (cargoBuscadoCompacto === 'preceptoria') {
+            coincideCargo = cargoItemNorm.includes('preceptor');
+          }
+        }
+
+        if (!coincideCargo) return false;
+      }
+      if (filtroLegajo) {
+        if (!normalizarFiltroTexto(item.legajo).includes(filtroLegajo)) return false;
+      }
+      if (filtroDni) {
+        if (!String(item.dni).replace(/\D/g, '').includes(filtroDni)) return false;
+      }
+      if (filtroTurno && filtroTurno !== 'todos') {
+        if (normalizarFiltroTexto(item.turno) !== filtroTurno) return false;
+      }
+      return true;
+    });
+
+    res.json({
+      total: filtrados.length,
+      totalGeneral: todosConsolidados.length,
+      registros: filtrados,
+      opcionesCargos,
+      opcionesTurnos,
+    });
+  } catch (error: any) {
+    console.error('❌ Error al obtener reportes multifiltro No Docente:', error);
+    res.status(500).json({
+      error: 'Error al consultar reportes multifiltro.',
+      detalle: error.message,
+    });
   }
 }
 

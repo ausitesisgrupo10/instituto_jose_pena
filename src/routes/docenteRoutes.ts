@@ -53,12 +53,12 @@ router.get('/mis-materias', autorizarRoles('Docente', 'Admin'), obtenerMisMateri
  * @ruta GET /api/docentes/buscar-registros
  * @descripción Multifiltro de registros por curso, división, turno, apellido, nombre o DNI.
  */
-router.get('/buscar-registros', autorizarRoles('Docente', 'Admin'), buscarRegistrosDocente);
+router.get('/buscar-registros', autorizarRoles('Docente', 'No Docente', 'Director', 'Admin'), buscarRegistrosDocente);
 
 /**
  * @ruta GET /api/docentes/registro-alumno/:alumnoId
  * @descripción Devuelve la ficha detallada de un alumno (datos personales, materias/notas trimestrales, sanciones y observación general).
  */
-router.get('/registro-alumno/:alumnoId', autorizarRoles('Docente', 'Admin'), obtenerDetalleRegistroAlumno);
+router.get('/registro-alumno/:alumnoId', autorizarRoles('Docente', 'No Docente', 'Director', 'Admin'), obtenerDetalleRegistroAlumno);
 
 export default router;
