@@ -21,6 +21,7 @@ import { Parentesco } from '../models/Parentesco.js';
 import { RegistroAcademico } from '../models/RegistroAcademico.js';
 import { Asistencia } from '../models/Asistencia.js';
 import { AsistenciaDocente } from '../models/AsistenciaDocente.js';
+import { estudiantesPdfDataset } from './estudiantesPdfDataset.js';
 
 // Dataset crudo suministrado
 export const rawDataset = {
@@ -61,13 +62,25 @@ export const rawDataset = {
     { nombre: '1° Año', nivel: 'Secundario' },
     { nombre: '2° Año', nivel: 'Secundario' },
     { nombre: '3° Año', nivel: 'Secundario' },
+    { nombre: '4° Año', nivel: 'Secundario' },
+    { nombre: '5° Año', nivel: 'Secundario' },
+    { nombre: '6° Año', nivel: 'Secundario' },
     { nombre: '4° Grado', nivel: 'Primario' },
     { nombre: 'Sala de 5', nivel: 'Inicial' }
   ],
   secciones: [
     { nombre: 'División A', curso: '1° Año (Secundario)', turno: 'Mañana' },
+    { nombre: 'División B', curso: '1° Año (Secundario)', turno: 'Tarde' },
+    { nombre: 'División A', curso: '2° Año (Secundario)', turno: 'Mañana' },
     { nombre: 'División B', curso: '2° Año (Secundario)', turno: 'Tarde' },
     { nombre: 'División A', curso: '3° Año (Secundario)', turno: 'Mañana' },
+    { nombre: 'División B', curso: '3° Año (Secundario)', turno: 'Tarde' },
+    { nombre: 'División A', curso: '4° Año (Secundario)', turno: 'Mañana' },
+    { nombre: 'División B', curso: '4° Año (Secundario)', turno: 'Tarde' },
+    { nombre: 'División A', curso: '5° Año (Secundario)', turno: 'Mañana' },
+    { nombre: 'División B', curso: '5° Año (Secundario)', turno: 'Tarde' },
+    { nombre: 'División A', curso: '6° Año (Secundario)', turno: 'Mañana' },
+    { nombre: 'División B', curso: '6° Año (Secundario)', turno: 'Tarde' },
     { nombre: 'Sección Única', curso: '4° Grado (Primario)', turno: 'Mañana' },
     { nombre: 'Sala Verde', curso: 'Sala de 5 (Inicial)', turno: 'Mañana' }
   ],
@@ -306,7 +319,67 @@ export async function sembrarDatasetCompleto(): Promise<void> {
       mapaUsuarios.set(u.dni, usuarioDoc);
     }
   }
-  console.log(`✅ ${rawDataset.usuarios.length} Usuarios insertados con contraseñas encriptadas con bcrypt.`);
+
+  // 4b. Poblar los 50 estudiantes del archivo PDF oficial (Estudiantes_Instituto_Jose_Pena_2026.pdf)
+  const alumnoDefaultHash = await bcrypt.hash('Alumno123!', SALT_ROUNDS);
+  for (const est of estudiantesPdfDataset) {
+    if (mapaUsuarios.has(est.dni)) continue;
+
+    const cursoNombre = `${est.curso}° Año`;
+    const divisionNombre = `División ${est.division}`;
+    const seccionKey = `${divisionNombre} (${cursoNombre} - Secundario)`;
+    const seccionDoc = mapaSecciones.get(seccionKey);
+    const cursoDoc = seccionDoc ? mapaCursos.get(cursoNombre) : mapaCursos.get(cursoNombre);
+
+    const seccionId = seccionDoc ? seccionDoc._id : null;
+    const cursoId = cursoDoc ? cursoDoc._id : seccionDoc?.curso_id || null;
+
+    const emailBase = `${est.nombre}.${est.apellido}.${est.dni.slice(-3)}`
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .replace(/[^a-z0-9.]/g, '');
+
+    const alumnoPdfDoc = await User.create({
+      dni: est.dni,
+      nombre: est.nombre,
+      apellido: est.apellido,
+      rol: 'Alumno',
+      permisos: ['CONSULTA_PROPIA'],
+      curso_id: cursoId,
+      seccion_id: seccionId,
+      turno: est.turno,
+      passwordHash: alumnoDefaultHash,
+      estado: est.estado,
+      perfil_metadata: {
+        email: `${emailBase}@josepena.edu.ar`,
+        dni: est.dni,
+        legajo: `ALU-${est.dni.slice(-4)}`,
+        fecha_nacimiento: est.fecha_nacimiento,
+        curso: cursoNombre,
+        curso_numero: est.curso,
+        division: est.division,
+        seccion: divisionNombre,
+        turno: est.turno,
+        curso_id: cursoId,
+        seccion_id: seccionId,
+        direccion: est.direccion,
+        barrio: est.barrio,
+        localidad: est.localidad,
+        provincia: est.provincia,
+        contacto: est.contacto,
+        telefono: est.contacto,
+        contacto_emergencia: est.contacto,
+        promedio_general: est.promedio_general,
+        sanciones: est.sanciones,
+        observacion_general: `Estudiante de ${cursoNombre} División ${est.division} (${est.turno}). Promedio general: ${est.promedio_general.toFixed(2)}.`,
+      },
+    });
+    mapaUsuarios.set(est.dni, alumnoPdfDoc);
+  }
+  console.log(
+    `✅ ${rawDataset.usuarios.length} usuarios base + ${estudiantesPdfDataset.length} alumnos del PDF insertados con bcrypt.`
+  );
 
   // 5. Poblar Materias y Vincular con Sección y Docente
   for (const m of rawDataset.materias) {

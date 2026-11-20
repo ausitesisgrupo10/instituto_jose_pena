@@ -5,7 +5,7 @@
  */
 
 import { Router } from 'express';
-import { autenticarJWT } from '../middleware/authMiddleware.js';
+import { autenticarJWT, autorizarRoles } from '../middleware/authMiddleware.js';
 import {
   registrarAsistenciaDiaria,
   listarAsistencias,
@@ -13,6 +13,10 @@ import {
   eliminarAsistencia,
   consultarPersonasUnificado,
   obtenerFichaDocente,
+  listarAlumnosAbm,
+  crearAlumnoAbm,
+  actualizarAlumnoAbm,
+  eliminarAlumnoAbm,
 } from '../controllers/noDocenteController.js';
 
 const router = Router();
@@ -20,11 +24,17 @@ const router = Router();
 // Aplicar middleware de autenticación a todas las rutas
 router.use(autenticarJWT);
 
-// Control de Asistencias Diarias (Alumnos y Docentes)
+// Control de Asistencias Diarias (Alumnos, Docentes y No Docentes)
 router.get('/asistencias', listarAsistencias);
 router.post('/asistencias', registrarAsistenciaDiaria);
 router.put('/asistencias/:id', actualizarAsistencia);
 router.delete('/asistencias/:id', eliminarAsistencia);
+
+// ABM de Alumnos (Alta, Modificación y Baja — Rol No Docente / Admin)
+router.get('/alumnos', autorizarRoles('No Docente', 'Admin', 'Director'), listarAlumnosAbm);
+router.post('/alumnos', autorizarRoles('No Docente', 'Admin'), crearAlumnoAbm);
+router.put('/alumnos/:id', autorizarRoles('No Docente', 'Admin'), actualizarAlumnoAbm);
+router.delete('/alumnos/:id', autorizarRoles('No Docente', 'Admin'), eliminarAlumnoAbm);
 
 // Consulta Unificada de Personas
 router.get('/personas', consultarPersonasUnificado);

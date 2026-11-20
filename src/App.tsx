@@ -20,6 +20,7 @@ import { DirectorReportesView } from './components/views/DirectorReportesView.js
 import { DocenteDashboardView } from './components/views/DocenteDashboardView.js';
 import { AsistenciasView } from './components/views/AsistenciasView.js';
 import { ConsultaPersonasView } from './components/views/ConsultaPersonasView.js';
+import { AbmAlumnosView } from './components/views/AbmAlumnosView.js';
 import { TutorBoletinView } from './components/views/TutorBoletinView.js';
 import { ManualGoogleDocsModal } from './components/ManualGoogleDocsModal.js';
 import { IUser } from './types.js';
@@ -149,6 +150,8 @@ export default function App() {
         return 'Reportes y Estadísticas';
       case 'inasistencias_docente':
         return 'Mis Inasistencias y Actas';
+      case 'abm_alumnos':
+        return 'ABM de Alumnos';
       default:
         return 'Inicio';
     }
@@ -171,6 +174,8 @@ export default function App() {
         return <ConsultaPersonasView />;
       case 'inasistencias_docente':
         return <DocenteDashboardView usuario={usuario} tabInicial="inasistencias" />;
+      case 'abm_alumnos':
+        return <AbmAlumnosView />;
       case 'usuarios':
         return <UsuariosView />;
       case 'cursos':
