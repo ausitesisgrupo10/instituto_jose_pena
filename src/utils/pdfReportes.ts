@@ -10,6 +10,11 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { IUser } from '../types.js';
+import {
+  construirNombreArchivoPdf,
+  obtenerTextoFechaHora,
+  obtenerTextoHora,
+} from './fechaHoraPdf.js';
 
 // Colores Institucionales Oficiales del Instituto José Peña
 const COLOR_NAVY: [number, number, number] = [24, 36, 59]; // #18243b
@@ -112,7 +117,7 @@ function dibujarEncabezadoInstitucional(
   doc.setFontSize(7.5);
   doc.setTextColor(220, 228, 240);
   doc.text(`CÓD: ${codigoDocumento}`, 196, 16, { align: 'right' });
-  doc.text(`Fecha: ${new Date().toLocaleDateString('es-AR')}`, 196, 21, { align: 'right' });
+  doc.text(`Fecha y Hora: ${obtenerTextoFechaHora()}`, 196, 21, { align: 'right' });
 
   // Título del reporte en cuerpo
   doc.setTextColor(...COLOR_NAVY);
@@ -162,7 +167,7 @@ function dibujarFichaEmision(
   doc.setFont('helvetica', 'bold');
   doc.text('HORA DE EMISIÓN:', 125, startY + 12);
   doc.setFont('helvetica', 'normal');
-  doc.text(new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs', 158, startY + 12);
+  doc.text(`${obtenerTextoHora()} hs`, 158, startY + 12);
 
   return startY + 23;
 }
@@ -507,7 +512,7 @@ export function exportarPDFInformeEstadistico(
       `Índice Global de Presentismo Docente: ${tasaPresentismoDoc}%. Rendimiento Académico Positivo: ${tasaAprobacionTotal}%. Planillas de control verificadas de conformidad.`
   );
 
-  doc.save(`IJP_Informe_Estadistico_${new Date().toISOString().slice(0, 10)}.pdf`);
+  doc.save(construirNombreArchivoPdf('IJP_Informe_Estadistico'));
 }
 
 /**
@@ -661,7 +666,7 @@ export function exportarPDFPlanillaAsistenciaDocente(
       'Se certifica que la presente planilla refleja el control biométrico y partes diarios de asistencia correspondientes al personal docente en funciones.'
   );
 
-  doc.save(`IJP_Planilla_Asistencia_Docente_${new Date().toISOString().slice(0, 10)}.pdf`);
+  doc.save(construirNombreArchivoPdf('IJP_Planilla_Asistencia_Docente'));
 }
 
 /**
@@ -748,5 +753,5 @@ export function exportarPDFActaValidacionPlanillas(
       'Las planificaciones y calificaciones detalladas precedentemente fueron auditadas con base en las resoluciones ministeriales vigentes y los criterios de evaluación del Instituto José Peña.'
   );
 
-  doc.save(`IJP_Acta_Validacion_Planillas_${new Date().toISOString().slice(0, 10)}.pdf`);
+  doc.save(construirNombreArchivoPdf('IJP_Acta_Validacion_Planillas'));
 }

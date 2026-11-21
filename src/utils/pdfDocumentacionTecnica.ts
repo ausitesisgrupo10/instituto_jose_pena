@@ -6,6 +6,7 @@
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { construirNombreArchivoPdf } from './fechaHoraPdf.js';
 
 const COLOR_NAVY: [number, number, number] = [27, 42, 74]; // #1b2a4a
 const COLOR_BLUE: [number, number, number] = [37, 99, 235]; // #2563eb
@@ -399,5 +400,5 @@ export function construirPdfDocumentacionTecnica(): jsPDF {
 
 export function descargarPdfDocumentacionTecnica(): void {
   const doc = construirPdfDocumentacionTecnica();
-  doc.save(NOMBRE_ARCHIVO_PDF_TECNICO);
+  doc.save(construirNombreArchivoPdf('Documentacion_Fixtures_Versionado_Instituto_Jose_Pena'));
 }

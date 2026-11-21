@@ -6,6 +6,10 @@
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import {
+  construirNombreArchivoPdf,
+  obtenerTextoFechaHora,
+} from './fechaHoraPdf.js';
 
 export interface RegistroDocentePdfRow {
   dni: string;
@@ -51,11 +55,8 @@ export function exportarRegistrosDocenteAPdf({
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const fechaHoy = new Date().toISOString().split('T')[0];
-  const horaActual = new Date().toLocaleTimeString('es-AR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const ahora = new Date();
+  const fechaHoraTexto = obtenerTextoFechaHora(ahora);
 
   // Banda superior institucional
   doc.setFillColor(...COLOR_NAVY);
@@ -80,7 +81,7 @@ export function exportarRegistrosDocenteAPdf({
   doc.text(`${subtituloDocente}   •   ${asigStr}`, 14, 19.5);
 
   doc.setFontSize(8.5);
-  doc.text(`Generado: ${fechaHoy} ${horaActual}`, pageWidth - 14, 19.5, { align: 'right' });
+  doc.text(`Fecha y Hora: ${fechaHoraTexto}`, pageWidth - 14, 19.5, { align: 'right' });
 
   // Bloque informativo de criterios y ordenamiento
   doc.setTextColor(...COLOR_TEXT);
@@ -190,5 +191,5 @@ export function exportarRegistrosDocenteAPdf({
   });
 
   const prefijo = esDescargaTotal ? 'Registros_Docente_Todo' : 'Registros_Docente_Filtrado';
-  doc.save(`${prefijo}_${fechaHoy}.pdf`);
+  doc.save(construirNombreArchivoPdf(prefijo, ahora));
 }

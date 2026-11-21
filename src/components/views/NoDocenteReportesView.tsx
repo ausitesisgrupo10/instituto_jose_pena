@@ -6,18 +6,17 @@
  */
 
 import React, { useMemo, useState } from 'react';
-import * as XLSX from 'xlsx';
 import {
   SlidersHorizontal,
   RotateCcw,
   Download,
-  FileSpreadsheet,
   Loader2,
   AlertCircle,
   CheckCircle2,
   Search,
   FileText,
 } from 'lucide-react';
+import { exportarReporteConsolidadoAPdf } from '../../utils/pdfConsolidadoInstitucional.js';
 
 interface RegistroReporteItem {
   _id: string;
@@ -48,42 +47,6 @@ interface RegistroReporteItem {
   promedio_general: number | string;
   sanciones: number;
 }
-
-const HEADERS_DOCENTE_NO_DOCENTE = [
-  'Legajo',
-  'DNI',
-  'Apellido',
-  'Nombre',
-  'Rol',
-  'Asignatura',
-  'Turno',
-  'Teléfono',
-  'Email',
-  'Dirección',
-  'Ciudad',
-  'Estado',
-  'Fecha de inicio',
-  'Fecha fin',
-];
-
-const HEADERS_ESTUDIANTE = [
-  'Nombre',
-  'Apellido',
-  'DNI',
-  'Rol',
-  'Estado',
-  'Fecha de Nacimiento',
-  'Curso',
-  'Division',
-  'Turno',
-  'Direccion',
-  'Barrio',
-  'Localidad',
-  'Provincia',
-  'Contacto',
-  'Promedio General',
-  'Sanciones',
-];
 
 const CARGOS_GENERALES = [
   'Directivo',
@@ -204,97 +167,31 @@ export const NoDocenteReportesView: React.FC<NoDocenteReportesViewProps> = ({
     setExitoMsg(null);
   };
 
-  const mapearFilaDocenteNoDocente = (r: RegistroReporteItem): (string | number)[] => [
-    r.legajo || '',
-    r.dni || '',
-    r.apellido || '',
-    r.nombre || '',
-    r.rol || '',
-    r.asignatura || '-',
-    r.turno || '',
-    r.telefono || '',
-    r.email || '',
-    r.direccion || '',
-    r.ciudad || '',
-    r.estado || 'Activo',
-    r.fecha_inicio || '',
-    r.fecha_fin || '',
-  ];
-
-  const mapearFilaEstudiante = (r: RegistroReporteItem): (string | number)[] => [
-    r.nombre || '',
-    r.apellido || '',
-    r.dni || '',
-    r.rol || 'Alumno',
-    r.estado || 'Activo',
-    r.fecha_nacimiento || '',
-    r.curso || '',
-    r.division || '',
-    r.turno || '',
-    r.direccion || '',
-    r.barrio || '',
-    r.localidad || '',
-    r.provincia || '',
-    r.contacto || '',
-    r.promedio_general !== '' && r.promedio_general !== undefined && r.promedio_general !== null
-      ? Number(r.promedio_general).toFixed(2)
-      : '',
-    r.sanciones ?? 0,
-  ];
-
-  const exportarArchivoXls = (datos: RegistroReporteItem[], esDescargaTotal: boolean) => {
-    const docentesYNoDocentes = datos.filter(
-      (r) => r.rol === 'Docente' || r.rol === 'No Docente'
-    );
-    const estudiantes = datos.filter((r) => r.rol === 'Alumno');
-    const otrosRoles = datos.filter(
-      (r) => r.rol !== 'Docente' && r.rol !== 'No Docente' && r.rol !== 'Alumno'
-    );
-
-    const wb = XLSX.utils.book_new();
-
-    if (docentesYNoDocentes.length > 0) {
-      const aoaPersonal = [
-        HEADERS_DOCENTE_NO_DOCENTE,
-        ...docentesYNoDocentes.map(mapearFilaDocenteNoDocente),
-      ];
-      const wsPersonal = XLSX.utils.aoa_to_sheet(aoaPersonal);
-      XLSX.utils.book_append_sheet(wb, wsPersonal, 'Docentes y No Docentes');
-    }
-
-    if (estudiantes.length > 0) {
-      const aoaEstudiantes = [
-        HEADERS_ESTUDIANTE,
-        ...estudiantes.map(mapearFilaEstudiante),
-      ];
-      const wsEstudiantes = XLSX.utils.aoa_to_sheet(aoaEstudiantes);
-      XLSX.utils.book_append_sheet(wb, wsEstudiantes, 'Estudiantes');
-    }
-
-    if (otrosRoles.length > 0) {
-      const aoaOtros = [
-        HEADERS_DOCENTE_NO_DOCENTE,
-        ...otrosRoles.map(mapearFilaDocenteNoDocente),
-      ];
-      const wsOtros = XLSX.utils.aoa_to_sheet(aoaOtros);
-      XLSX.utils.book_append_sheet(wb, wsOtros, 'Otros Roles');
-    }
-
-    const fechaHoy = new Date().toISOString().split('T')[0];
-    let nombreArchivo = `Reporte_Institucional_Completo_${fechaHoy}.xls`;
+  const exportarArchivoPdf = (datos: RegistroReporteItem[], esDescargaTotal: boolean) => {
+    let nombreBase = 'Reporte_Institucional_Completo';
+    const criteriosTexto: string[] = [];
 
     if (!esDescargaTotal && filtrosActivosCount > 0) {
       if (rol === 'Alumno') {
-        nombreArchivo = `Reporte_Estudiantes_${fechaHoy}.xls`;
+        nombreBase = 'Reporte_Estudiantes';
       } else if (rol === 'Docente' || rol === 'No Docente') {
-        nombreArchivo = `Reporte_${rol.replace(/\s+/g, '_')}_${fechaHoy}.xls`;
+        nombreBase = `Reporte_${rol.replace(/\s+/g, '_')}`;
       } else {
-        nombreArchivo = `Reporte_Filtrado_${fechaHoy}.xls`;
+        nombreBase = 'Reporte_Filtrado';
       }
+      if (rol) criteriosTexto.push(`Rol: ${rol === 'Alumno' ? 'Estudiante' : rol}`);
+      if (cargo) criteriosTexto.push(`Cargo: ${cargo}`);
+      if (legajo) criteriosTexto.push(`Legajo: ${legajo}`);
+      if (dni) criteriosTexto.push(`DNI: ${dni}`);
+      if (turno) criteriosTexto.push(`Turno: ${turno}`);
     }
 
-    XLSX.writeFile(wb, nombreArchivo, { bookType: 'biff8' });
-    return nombreArchivo;
+    return exportarReporteConsolidadoAPdf({
+      datos,
+      esDescargaTotal,
+      nombreBaseArchivo: nombreBase,
+      criteriosTexto,
+    });
   };
 
   // Descargar según los filtros seleccionados (si no hay filtros, descarga todo por defecto)
@@ -322,10 +219,10 @@ export const NoDocenteReportesView: React.FC<NoDocenteReportesViewProps> = ({
         return;
       }
 
-      const archivo = exportarArchivoXls(lista, filtrosActivosCount === 0);
+      const archivo = exportarArchivoPdf(lista, filtrosActivosCount === 0);
       setExitoMsg(`Se descargó ${archivo} con ${lista.length} ${lista.length === 1 ? 'registro' : 'registros'}.`);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error al generar la descarga .xls.');
+      setErrorMsg(err.message || 'Error al generar el reporte PDF.');
     } finally {
       setDescargando(null);
     }
@@ -353,10 +250,10 @@ export const NoDocenteReportesView: React.FC<NoDocenteReportesViewProps> = ({
         return;
       }
 
-      const archivo = exportarArchivoXls(lista, true);
+      const archivo = exportarArchivoPdf(lista, true);
       setExitoMsg(`Se descargó ${archivo} con todos los registros (${lista.length}).`);
     } catch (err: any) {
-      setErrorMsg(err.message || 'Error al generar el archivo completo .xls.');
+      setErrorMsg(err.message || 'Error al generar el archivo PDF completo.');
     } finally {
       setDescargando(null);
     }
@@ -371,10 +268,10 @@ export const NoDocenteReportesView: React.FC<NoDocenteReportesViewProps> = ({
           </div>
           <div>
             <h2 className="font-bold text-base text-[#1b2a4a]">
-              Reportes y Exportación Multifiltro (.xls)
+              Reportes y Exportación Multifiltro (PDF)
             </h2>
             <p className="text-xs text-slate-500">
-              Selecciona uno o varios filtros indistintamente y descarga los registros actualizados en formato Excel (.xls).
+              Selecciona uno o varios filtros indistintamente y descarga los registros actualizados en formato PDF con fecha y hora.
             </p>
           </div>
         </div>
@@ -488,8 +385,8 @@ export const NoDocenteReportesView: React.FC<NoDocenteReportesViewProps> = ({
                 disabled={descargando !== null}
                 title={
                   filtrosActivosCount > 0
-                    ? 'Descargar registros correspondientes a los filtros seleccionados (.xls)'
-                    : 'Sin filtros seleccionados: descarga todos los registros por defecto (.xls)'
+                    ? 'Descargar registros correspondientes a los filtros seleccionados (PDF)'
+                    : 'Sin filtros seleccionados: descarga todos los registros por defecto (PDF)'
                 }
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-[#1d3557] hover:bg-[#152741] text-white text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-60"
               >
@@ -498,22 +395,22 @@ export const NoDocenteReportesView: React.FC<NoDocenteReportesViewProps> = ({
                 ) : (
                   <Download className="w-4 h-4" />
                 )}
-                <span>{descargando === 'filtrado' ? 'Descargando...' : 'Descargar'}</span>
+                <span>{descargando === 'filtrado' ? 'Generando PDF...' : 'Descargar (PDF)'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleDescargarTodo}
                 disabled={descargando !== null}
-                title="Descargar toda la información institucional cargada hasta el momento (.xls)"
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-60"
+                title="Descargar toda la información institucional cargada hasta el momento en PDF"
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-60"
               >
                 {descargando === 'todo' ? (
                   <Loader2 className="w-4 h-4 animate-spin" />
                 ) : (
-                  <FileSpreadsheet className="w-4 h-4" />
+                  <FileText className="w-4 h-4" />
                 )}
-                <span>{descargando === 'todo' ? 'Descargando...' : 'Descargar todo'}</span>
+                <span>{descargando === 'todo' ? 'Generando PDF...' : 'Descargar todo (PDF)'}</span>
               </button>
             </div>
 

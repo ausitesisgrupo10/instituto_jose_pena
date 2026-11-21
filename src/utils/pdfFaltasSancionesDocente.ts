@@ -6,6 +6,10 @@
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import {
+  construirNombreArchivoPdf,
+  obtenerTextoFechaHora,
+} from './fechaHoraPdf.js';
 
 export interface FaltaSancionPdfRow {
   fecha: string;
@@ -46,11 +50,8 @@ export function exportarFaltasSancionesDocenteAPdf({
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const fechaHoy = new Date().toISOString().split('T')[0];
-  const horaActual = new Date().toLocaleTimeString('es-AR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const ahora = new Date();
+  const fechaHoraTexto = obtenerTextoFechaHora(ahora);
 
   // Banda superior institucional
   doc.setFillColor(...COLOR_NAVY);
@@ -71,7 +72,7 @@ export function exportarFaltasSancionesDocenteAPdf({
   doc.text(subtituloDocente, 14, 19.5);
 
   doc.setFontSize(8.5);
-  doc.text(`Generado: ${fechaHoy} ${horaActual}`, pageWidth - 14, 19.5, { align: 'right' });
+  doc.text(`Fecha y Hora: ${fechaHoraTexto}`, pageWidth - 14, 19.5, { align: 'right' });
 
   // Encabezado del criterio
   doc.setTextColor(...COLOR_TEXT);
@@ -160,5 +161,5 @@ export function exportarFaltasSancionesDocenteAPdf({
   });
 
   const prefijo = esDescargaTotal ? 'Faltas_y_Sanciones_Todo' : 'Faltas_y_Sanciones_Filtrado';
-  doc.save(`${prefijo}_${fechaHoy}.pdf`);
+  doc.save(construirNombreArchivoPdf(prefijo, ahora));
 }

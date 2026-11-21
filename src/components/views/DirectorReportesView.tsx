@@ -7,7 +7,6 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  FileSpreadsheet,
   FileDown,
   Search,
   ChevronLeft,
@@ -18,6 +17,10 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { IUser } from '../../types.js';
 import { NoDocenteReportesView } from './NoDocenteReportesView.js';
+import {
+  construirNombreArchivoPdf,
+  obtenerTextoFechaHora,
+} from '../../utils/fechaHoraPdf.js';
 
 interface DirectorReportesViewProps {
   usuario: IUser | null;
@@ -103,49 +106,12 @@ export const DirectorReportesView: React.FC<DirectorReportesViewProps> = ({ usua
     consultarReportes({ cursoDivision, fechaDesde, fechaHasta, tipo });
   };
 
-  // Exportar Excel (.CSV con BOM UTF-8 para compatibilidad directa con Excel)
-  const handleExportarCSV = () => {
-    if (registros.length === 0) return;
-
-    const encabezados = [
-      'Alumno',
-      'DNI',
-      'Curso / División',
-      'Fecha',
-      'Tipo',
-      'Estado / Calificación',
-      'Observaciones',
-    ];
-
-    const escapar = (valor: string) => `"${String(valor ?? '').replace(/"/g, '""')}"`;
-
-    const filas = registros.map((r) => [
-      escapar(r.alumno),
-      escapar(r.dni),
-      escapar(r.cursoDivision),
-      escapar(r.fechaDisplay),
-      escapar(r.tipo),
-      escapar(r.estadoCalificacion),
-      escapar(r.observaciones),
-    ]);
-
-    const contenido = '\uFEFF' + [encabezados.map(escapar).join(';'), ...filas.map((f) => f.join(';'))].join('\n');
-    const blob = new Blob([contenido], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const fechaHoy = new Date().toISOString().split('T')[0];
-    link.href = url;
-    link.download = `Reporte_Directivo_Instituto_Jose_Pena_${fechaHoy}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  // Exportar PDF oficial con jsPDF + autoTable
+  // Exportar PDF oficial con jsPDF + autoTable (Reporte + Fecha + Hora)
   const handleExportarPDF = () => {
     if (registros.length === 0) return;
 
+    const ahora = new Date();
+    const fechaHoraTexto = obtenerTextoFechaHora(ahora);
     const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
     doc.setFontSize(16);
     doc.setTextColor(27, 42, 74);
@@ -154,16 +120,17 @@ export const DirectorReportesView: React.FC<DirectorReportesViewProps> = ({ usua
     doc.setFontSize(10);
     doc.setTextColor(100, 116, 139);
     doc.text(
-      `Emitido por: ${usuario?.nombre || ''} ${usuario?.apellido || ''} (Director) | Curso/División: ${cursoDivision} | Tipo: ${tipo} | Total: ${registros.length} registros`,
+      `Emitido por: ${usuario?.nombre || ''} ${usuario?.apellido || ''} (Director) | Curso/División: ${cursoDivision} | Tipo: ${tipo} | Total: ${registros.length} registros | Fecha y Hora: ${fechaHoraTexto}`,
       40,
       60
     );
 
     autoTable(doc, {
       startY: 76,
-      head: [['Alumno', 'Curso / División', 'Fecha', 'Tipo', 'Estado / Calificación', 'Observaciones']],
+      head: [['Alumno', 'DNI', 'Curso / División', 'Fecha', 'Tipo', 'Estado / Calificación', 'Observaciones']],
       body: registros.map((r) => [
         r.alumno,
+        r.dni,
         r.cursoDivision,
         r.fechaDisplay,
         r.tipo,
@@ -175,8 +142,7 @@ export const DirectorReportesView: React.FC<DirectorReportesViewProps> = ({ usua
       alternateRowStyles: { fillColor: [248, 250, 252] },
     });
 
-    const fechaHoy = new Date().toISOString().split('T')[0];
-    doc.save(`Reporte_Directivo_Instituto_Jose_Pena_${fechaHoy}.pdf`);
+    doc.save(construirNombreArchivoPdf('Reporte_Directivo_Instituto_Jose_Pena', ahora));
   };
 
   // Cálculo de paginación
@@ -187,7 +153,7 @@ export const DirectorReportesView: React.FC<DirectorReportesViewProps> = ({ usua
 
   return (
     <div className="p-6 md:p-8 max-w-7xl mx-auto space-y-6 font-sans">
-      {/* 1. Encabezado con Bienvenida y Botones de Exportación */}
+      {/* 1. Encabezado con Bienvenida y Botón de Exportación PDF */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex flex-wrap items-center gap-2.5">
           <h2 className="text-xl md:text-2xl font-extrabold text-[#1b2a4a] tracking-tight">
@@ -199,16 +165,6 @@ export const DirectorReportesView: React.FC<DirectorReportesViewProps> = ({ usua
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={handleExportarCSV}
-            disabled={registros.length === 0}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-bold shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
-          >
-            <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-            <span>Exportar Excel (.CSV)</span>
-          </button>
-
           <button
             type="button"
             onClick={handleExportarPDF}
@@ -417,7 +373,7 @@ export const DirectorReportesView: React.FC<DirectorReportesViewProps> = ({ usua
         </div>
       </section>
 
-      {/* 4. Módulo de Exportación Multifiltro (.xls) por Rol, Cargo, Legajo, DNI y Turno */}
+      {/* 4. Módulo de Exportación Multifiltro (PDF) por Rol, Cargo, Legajo, DNI y Turno */}
       <NoDocenteReportesView sinContenedor />
     </div>
   );

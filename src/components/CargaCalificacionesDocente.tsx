@@ -12,7 +12,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  FileSpreadsheet,
+  FileText,
   Calendar,
   Users,
   Search,
@@ -22,7 +22,10 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { IRegistroAcademico } from '../types.js';
-import { exportarRegistrosAExcel, FilaExcelRegistro } from '../utils/exportExcel.js';
+import {
+  exportarRegistrosAcademicosAPdf,
+  FilaPdfRegistroAcademico,
+} from '../utils/pdfConsolidadoInstitucional.js';
 
 interface MateriaAlumnoData {
   materia_id: string;
@@ -345,8 +348,8 @@ export const CargaCalificacionesDocente: React.FC<CargaCalificacionesDocenteProp
     }
   };
 
-  // Exportar calificaciones de la materia seleccionada a Excel (.xlsx)
-  const handleExportarExcelMateria = () => {
+  // Exportar calificaciones de la materia seleccionada a PDF con fecha y hora
+  const handleExportarPdfMateria = () => {
     if (!materiaSeleccionada || notasExistentes.length === 0) return;
 
     const notasPorAlumno = new Map<string, number[]>();
@@ -368,7 +371,7 @@ export const CargaCalificacionesDocente: React.FC<CargaCalificacionesDocenteProp
       }
     });
 
-    const filas: FilaExcelRegistro[] = notasExistentes.map((n) => {
+    const filas: FilaPdfRegistroAcademico[] = notasExistentes.map((n) => {
       const alu = typeof n.alumno_id === 'object' ? n.alumno_id : null;
       const aluId = String(alu?._id || n.alumno_id || '');
       const notasAlu = notasPorAlumno.get(aluId) || [];
@@ -397,7 +400,11 @@ export const CargaCalificacionesDocente: React.FC<CargaCalificacionesDocenteProp
       .replace(/[^a-zA-Z0-9áéíóúÁÉÍÓÚñÑ ]/g, '')
       .replace(/\s+/g, '_');
 
-    exportarRegistrosAExcel(filas, `Calificaciones_${nombreSeguro}`);
+    exportarRegistrosAcademicosAPdf(
+      filas,
+      `Calificaciones_${nombreSeguro}`,
+      `Instituto José Peña — Calificaciones de ${materiaSeleccionada.nombre_materia}`
+    );
   };
 
   if (cargando) {
@@ -623,12 +630,12 @@ export const CargaCalificacionesDocente: React.FC<CargaCalificacionesDocenteProp
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={handleExportarExcelMateria}
+                    onClick={handleExportarPdfMateria}
                     disabled={notasExistentes.length === 0}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg shadow-2xs transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    <FileSpreadsheet className="w-3.5 h-3.5" />
-                    <span>Descargar Excel</span>
+                    <FileText className="w-3.5 h-3.5" />
+                    <span>Descargar PDF</span>
                   </button>
                   <span className="px-2.5 py-1 bg-blue-50 text-blue-800 text-xs font-bold rounded-md">
                     {notasExistentes.length} Registros
@@ -728,12 +735,12 @@ export const CargaCalificacionesDocente: React.FC<CargaCalificacionesDocenteProp
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleExportarExcelMateria}
+                  onClick={handleExportarPdfMateria}
                   disabled={notasExistentes.length === 0}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer disabled:opacity-50"
                 >
-                  <FileSpreadsheet className="w-3.5 h-3.5" />
-                  <span>Descargar Excel</span>
+                  <FileText className="w-3.5 h-3.5" />
+                  <span>Descargar PDF</span>
                 </button>
                 <button
                   type="button"

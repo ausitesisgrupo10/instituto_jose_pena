@@ -5,11 +5,14 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import { FileSpreadsheet } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import { IMateria, IRegistroAcademico, IUser } from '../../types.js';
 import { Modal } from '../Modal.js';
 import { DocenteRegistrosSancionesPanel } from '../DocenteRegistrosSancionesPanel.js';
-import { exportarRegistrosAExcel, FilaExcelRegistro } from '../../utils/exportExcel.js';
+import {
+  exportarRegistrosAcademicosAPdf,
+  FilaPdfRegistroAcademico,
+} from '../../utils/pdfConsolidadoInstitucional.js';
 
 interface RegistrosViewProps {
   usuario: IUser | null;
@@ -286,11 +289,10 @@ export const RegistrosView: React.FC<RegistrosViewProps> = ({ usuario }) => {
     }
   };
 
-  // Exportar registros filtrados a Excel (.xlsx) con todas las columnas solicitadas
-  const handleExportarExcel = () => {
+  // Exportar registros filtrados a PDF con todas las columnas solicitadas + fecha y hora
+  const handleExportarPdf = () => {
     if (registrosFiltrados.length === 0) return;
 
-    // 1. Precalcular promedio general por (alumno_id + materia_id) usando todas las notas del alumno en esa materia
     const notasPorAlumnoMateria = new Map<string, number[]>();
     const sancionesPorAlumno = new Map<string, number>();
 
@@ -311,7 +313,7 @@ export const RegistrosView: React.FC<RegistrosViewProps> = ({ usuario }) => {
       }
     });
 
-    const filas: FilaExcelRegistro[] = registrosFiltrados.map((r) => {
+    const filas: FilaPdfRegistroAcademico[] = registrosFiltrados.map((r) => {
       const aluObj = typeof r.alumno_id === 'object' ? r.alumno_id : null;
       const matObj = typeof r.materia_id === 'object' ? r.materia_id : null;
       const secObj = matObj && typeof matObj.seccion_id === 'object' ? matObj.seccion_id : null;
@@ -350,7 +352,7 @@ export const RegistrosView: React.FC<RegistrosViewProps> = ({ usuario }) => {
       };
     });
 
-    exportarRegistrosAExcel(filas, 'Registros_y_Sanciones');
+    exportarRegistrosAcademicosAPdf(filas, 'Registros_y_Sanciones');
   };
 
   if (userRol === 'Docente') {
@@ -398,16 +400,16 @@ export const RegistrosView: React.FC<RegistrosViewProps> = ({ usuario }) => {
               />
             </div>
 
-            {/* Botones de Acción: Descargar Excel y Cargar Registro */}
+            {/* Botones de Acción: Descargar PDF y Cargar Registro */}
             <div className="flex flex-wrap items-center gap-2.5">
               <button
                 type="button"
-                onClick={handleExportarExcel}
+                onClick={handleExportarPdf}
                 disabled={registrosFiltrados.length === 0}
-                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-sm rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white font-semibold text-sm rounded-lg shadow-2xs transition-colors cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <FileSpreadsheet className="w-4 h-4" />
-                <span>Descargar Excel</span>
+                <FileText className="w-4 h-4" />
+                <span>Descargar PDF</span>
               </button>
 
               {(userRol === 'Admin' || userRol === 'Director' || userRol === 'Docente' || userRol === 'No Docente') && (

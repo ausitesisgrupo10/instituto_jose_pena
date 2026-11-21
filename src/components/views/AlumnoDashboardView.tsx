@@ -5,7 +5,9 @@
  */
 
 import React, { useEffect, useState } from 'react';
+import { FileText } from 'lucide-react';
 import { IUser } from '../../types.js';
+import { exportarBoletinEstudianteAPdf } from '../../utils/pdfBoletinEstudiante.js';
 
 interface AlumnoDashboardViewProps {
   usuario: IUser | null;
@@ -130,26 +132,45 @@ export const AlumnoDashboardView: React.FC<AlumnoDashboardViewProps> = ({ usuari
           </div>
         </div>
 
-        {/* Ficha de Asignación Educativa */}
-        <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200 text-center shrink-0">
-          <div className="px-3 py-1">
-            <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-              Año / Curso
-            </span>
-            <span className="text-sm font-extrabold text-[#1b2a4a]">{data.perfil.curso}</span>
+        {/* Ficha de Asignación Educativa y Descarga PDF */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
+          <div className="grid grid-cols-3 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200 text-center">
+            <div className="px-3 py-1">
+              <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                Año / Curso
+              </span>
+              <span className="text-sm font-extrabold text-[#1b2a4a]">{data.perfil.curso}</span>
+            </div>
+            <div className="px-3 py-1 border-l border-slate-200">
+              <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                Sección
+              </span>
+              <span className="text-sm font-extrabold text-[#1b2a4a]">{data.perfil.seccion}</span>
+            </div>
+            <div className="px-3 py-1 border-l border-slate-200">
+              <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                Turno
+              </span>
+              <span className="text-sm font-extrabold text-[#1b2a4a]">{data.perfil.turno}</span>
+            </div>
           </div>
-          <div className="px-3 py-1 border-l border-slate-200">
-            <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-              Sección
-            </span>
-            <span className="text-sm font-extrabold text-[#1b2a4a]">{data.perfil.seccion}</span>
-          </div>
-          <div className="px-3 py-1 border-l border-slate-200">
-            <span className="block text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-              Turno
-            </span>
-            <span className="text-sm font-extrabold text-[#1b2a4a]">{data.perfil.turno}</span>
-          </div>
+
+          <button
+            type="button"
+            onClick={() =>
+              exportarBoletinEstudianteAPdf({
+                ciclo_lectivo: '2026',
+                perfil: data.perfil,
+                inasistencias: data.inasistencias,
+                sanciones: data.sanciones,
+                tablaAcademica: data.tablaAcademica,
+              })
+            }
+            className="inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer"
+          >
+            <FileText className="w-4 h-4" />
+            <span>Descargar Boletín (PDF)</span>
+          </button>
         </div>
       </div>
 

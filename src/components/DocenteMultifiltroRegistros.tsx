@@ -7,7 +7,6 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import * as XLSX from 'xlsx';
 import {
   Search,
   SlidersHorizontal,
@@ -25,11 +24,11 @@ import {
   MessageSquare,
   ChevronRight,
   Download,
-  FileSpreadsheet,
   Calendar,
   ArrowUpDown,
 } from 'lucide-react';
 import { exportarRegistrosDocenteAPdf } from '../utils/pdfRegistrosDocente.js';
+import { exportarEstudiantesMultifiltroAPdf } from '../utils/pdfConsolidadoInstitucional.js';
 
 interface CursoOption {
   _id: string;
@@ -490,38 +489,7 @@ export const DocenteMultifiltroRegistros: React.FC<DocenteMultifiltroRegistrosPr
     return copia;
   }, [resultados, modoDocenteAsignatura, ordenPromedioAsc]);
 
-  // Exporta un arreglo de registros a formato Excel (.xls) con todos los campos de cada estudiante
-  const generarArchivoXls = (registrosExport: RegistroResumen[], nombreBase: string) => {
-    const filas = registrosExport.map((r) => ({
-      Nombre: r.nombre || '',
-      Apellido: r.apellido || '',
-      DNI: r.dni || '',
-      Rol: r.rol || 'Alumno',
-      Estado: r.estado || 'Activo',
-      'Fecha de Nacimiento': r.fecha_nacimiento || '',
-      Curso: r.curso || '',
-      División: r.division || '',
-      Turno: r.turno || '',
-      Dirección: r.direccion || '',
-      Barrio: r.barrio || '',
-      Localidad: r.localidad || '',
-      Provincia: r.provincia || '',
-      Contacto: r.contacto || '',
-      'Promedio General':
-        r.promedio_general !== undefined && r.promedio_general !== ''
-          ? Number(r.promedio_general).toFixed(2)
-          : '',
-      Sanciones: r.sanciones ?? 0,
-    }));
-
-    const ws = XLSX.utils.json_to_sheet(filas);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Estudiantes');
-    const fechaHoy = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(wb, `${nombreBase}_${fechaHoy}.xls`, { bookType: 'biff8' });
-  };
-
-  // Descargar TODO (todos los estudiantes registrados en la BD sin filtros)
+  // Exportar TODO en formato PDF (No Docente InicioView)
   const handleDescargarTodo = async () => {
     setDescargandoXls('todo');
     setErrorBusqueda(null);
@@ -540,15 +508,15 @@ export const DocenteMultifiltroRegistros: React.FC<DocenteMultifiltroRegistrosPr
         setErrorBusqueda('No existen registros de estudiantes cargados para descargar.');
         return;
       }
-      generarArchivoXls(todos, 'Estudiantes_Todos');
+      exportarEstudiantesMultifiltroAPdf(todos, 'Estudiantes_Todos');
     } catch (err: any) {
-      setErrorBusqueda(err.message || 'Error al generar el archivo Excel (.xls).');
+      setErrorBusqueda(err.message || 'Error al generar el reporte PDF.');
     } finally {
       setDescargandoXls(null);
     }
   };
 
-  // Descargar FILTRADO (solo lo seleccionado en el filtro; si no hay filtros, descarga todo por defecto)
+  // Descargar FILTRADO en formato PDF (solo lo seleccionado en el filtro; si no hay filtros, descarga todo por defecto)
   const handleDescargarFiltrado = async () => {
     setDescargandoXls('filtrado');
     setErrorBusqueda(null);
@@ -578,12 +546,12 @@ export const DocenteMultifiltroRegistros: React.FC<DocenteMultifiltroRegistrosPr
         setErrorBusqueda('No hay registros coincidentes con el filtro actual para descargar.');
         return;
       }
-      generarArchivoXls(
+      exportarEstudiantesMultifiltroAPdf(
         filtrados,
         filtrosActivosCount > 0 ? 'Estudiantes_Filtrados' : 'Estudiantes_Todos'
       );
     } catch (err: any) {
-      setErrorBusqueda(err.message || 'Error al generar el archivo Excel (.xls).');
+      setErrorBusqueda(err.message || 'Error al generar el reporte PDF.');
     } finally {
       setDescargandoXls(null);
     }
@@ -944,14 +912,14 @@ export const DocenteMultifiltroRegistros: React.FC<DocenteMultifiltroRegistrosPr
                 type="button"
                 onClick={handleDescargarTodo}
                 disabled={buscando || descargandoXls !== null}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-60"
               >
                 {descargandoXls === 'todo' ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
-                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  <FileText className="w-3.5 h-3.5" />
                 )}
-                <span>{descargandoXls === 'todo' ? 'Descargando...' : 'Descargar todo'}</span>
+                <span>{descargandoXls === 'todo' ? 'Generando PDF...' : 'Descargar todo (PDF)'}</span>
               </button>
 
               <button
@@ -960,8 +928,8 @@ export const DocenteMultifiltroRegistros: React.FC<DocenteMultifiltroRegistrosPr
                 disabled={buscando || descargandoXls !== null}
                 title={
                   filtrosActivosCount > 0
-                    ? 'Descargar solo los registros coincidentes con los filtros seleccionados (.xls)'
-                    : 'Sin filtros seleccionados: descargará todos los registros por defecto (.xls)'
+                    ? 'Descargar solo los registros coincidentes con los filtros seleccionados (PDF)'
+                    : 'Sin filtros seleccionados: descargará todos los registros por defecto (PDF)'
                 }
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#1d3557] hover:bg-[#152741] text-white text-xs font-bold shadow-xs transition-colors cursor-pointer disabled:opacity-60"
               >
@@ -970,7 +938,7 @@ export const DocenteMultifiltroRegistros: React.FC<DocenteMultifiltroRegistrosPr
                 ) : (
                   <Download className="w-3.5 h-3.5" />
                 )}
-                <span>{descargandoXls === 'filtrado' ? 'Descargando...' : 'Descargar'}</span>
+                <span>{descargandoXls === 'filtrado' ? 'Generando PDF...' : 'Descargar (PDF)'}</span>
               </button>
             </div>
           ) : (

@@ -5,9 +5,8 @@
  */
 
 import React, { useEffect, useState } from 'react';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
 import { IUser } from '../../types.js';
+import { exportarBoletinEstudianteAPdf } from '../../utils/pdfBoletinEstudiante.js';
 
 interface Hijo {
   _id: string;
@@ -135,159 +134,10 @@ export const TutorBoletinView: React.FC<TutorBoletinViewProps> = ({ usuario }) =
     fetchBoletin();
   }, [hijoSeleccionadoId]);
 
-  // 3. Generar y Descargar PDF Oficial del Boletín
+  // 3. Generar y Descargar PDF Oficial del Boletín con Fecha y Hora
   const handleDescargarPDF = () => {
     if (!boletin) return;
-
-    const doc = new jsPDF({
-      orientation: 'portrait',
-      unit: 'mm',
-      format: 'a4',
-    });
-
-    // Colores Institucionales
-    const azulMarino = [27, 42, 74]; // #1b2a4a
-    const bordoInstitucional = [164, 22, 26]; // #a4161a
-    const grisFondo = [244, 246, 249];
-
-    // Encabezado con Membrete Oficial
-    doc.setFillColor(azulMarino[0], azulMarino[1], azulMarino[2]);
-    doc.rect(0, 0, 210, 28, 'F');
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.text('INSTITUTO JOSÉ PEÑA', 14, 13);
-
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text('BOLETÍN DE CALIFICACIONES Y INFORME ACADÉMICO OFICIAL', 14, 20);
-    doc.text(`CICLO LECTIVO ${boletin.ciclo_lectivo}`, 196, 20, { align: 'right' });
-
-    // Ficha del Estudiante
-    doc.setFillColor(grisFondo[0], grisFondo[1], grisFondo[2]);
-    doc.roundedRect(14, 34, 182, 26, 2, 2, 'F');
-
-    doc.setTextColor(30, 41, 59);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.text(`${boletin.perfil.apellido}, ${boletin.perfil.nombre}`, 18, 42);
-
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(`DNI: ${boletin.perfil.dni}  |  Legajo: ${boletin.perfil.legajo}`, 18, 48);
-    doc.text(
-      `Curso / Sección: ${boletin.perfil.curso} - ${boletin.perfil.seccion} (${boletin.perfil.turno})`,
-      18,
-      54
-    );
-
-    // Resumen de Inasistencias y Sanciones
-    doc.setFillColor(255, 255, 255);
-    doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(140, 40, 52, 16, 2, 2, 'FD');
-
-    doc.setTextColor(bordoInstitucional[0], bordoInstitucional[1], bordoInstitucional[2]);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.text(`Faltas: ${boletin.inasistencias.total}`, 144, 46);
-    doc.text(`Sanciones: ${boletin.sanciones.total}`, 144, 52);
-
-    // Tabla de Calificaciones por Materia
-    const headersAcademico = [
-      ['MATERIA', '1° TRIMESTRE', '2° TRIMESTRE', '3° TRIMESTRE', 'PROMEDIO FINAL'],
-    ];
-
-    const rowsAcademico = boletin.tablaAcademica.map((m) => [
-      m.materia,
-      m.t1,
-      m.t2,
-      m.t3,
-      m.promedioFinal,
-    ]);
-
-    autoTable(doc, {
-      startY: 66,
-      head: headersAcademico,
-      body: rowsAcademico,
-      theme: 'grid',
-      headStyles: {
-        fillColor: azulMarino as [number, number, number],
-        textColor: [255, 255, 255],
-        fontStyle: 'bold',
-        fontSize: 9,
-        halign: 'center',
-      },
-      columnStyles: {
-        0: { halign: 'left', fontStyle: 'bold' },
-        1: { halign: 'center' },
-        2: { halign: 'center' },
-        3: { halign: 'center' },
-        4: { halign: 'center', fontStyle: 'bold' },
-      },
-      styles: {
-        fontSize: 8.5,
-        cellPadding: 3,
-      },
-    });
-
-    // Obtener posición final de la tabla académica
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
-
-    // Sección de Inasistencias y Sanciones si existen
-    if (boletin.inasistencias.listado.length > 0 || boletin.sanciones.listado.length > 0) {
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(azulMarino[0], azulMarino[1], azulMarino[2]);
-      doc.text('DETALLE DE INASISTENCIAS Y SANCIONES', 14, finalY);
-
-      const headersObservaciones = [['TIPO', 'FECHA', 'CONCEPTO / OBSERVACIÓN']];
-      const rowsObs = [
-        ...boletin.inasistencias.listado.map((i) => [
-          'Inasistencia',
-          i.fecha,
-          `${i.materia}: ${i.observacion || i.concepto}`,
-        ]),
-        ...boletin.sanciones.listado.map((s) => [
-          'Sanción',
-          s.fecha,
-          `${s.materia}: ${s.sancion} - ${s.observacion}`,
-        ]),
-      ];
-
-      autoTable(doc, {
-        startY: finalY + 4,
-        head: headersObservaciones,
-        body: rowsObs,
-        theme: 'striped',
-        headStyles: {
-          fillColor: [100, 116, 139],
-          textColor: [255, 255, 255],
-          fontSize: 8.5,
-        },
-        styles: {
-          fontSize: 8,
-          cellPadding: 2.5,
-        },
-      });
-    }
-
-    // Pie de página con Firma Institucional
-    const pageHeight = doc.internal.pageSize.height;
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(148, 163, 184);
-
-    doc.line(14, pageHeight - 25, 74, pageHeight - 25);
-    doc.text('Firma Preceptoría / Dirección', 14, pageHeight - 20);
-
-    doc.text(`Documento emitido el ${new Date().toLocaleDateString('es-AR')}`, 196, pageHeight - 20, {
-      align: 'right',
-    });
-
-    // Guardar PDF
-    const nombreArchivo = `Boletin_${boletin.perfil.apellido}_${boletin.perfil.nombre}_2026.pdf`;
-    doc.save(nombreArchivo);
+    exportarBoletinEstudianteAPdf(boletin);
   };
 
   if (cargandoHijos) {
