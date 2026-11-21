@@ -153,7 +153,9 @@ export async function obtenerBoletinHijo(req: AuthRequest, res: Response): Promi
       })),
     ];
 
-    const totalInasistencias = inasistenciasListado.length;
+    const totalInasistencias = inasistenciasListado.filter(
+      (item) => String(item.concepto || '').trim().toLowerCase() !== 'presente'
+    ).length;
 
     // 3. Sanciones Disciplinarias
     const sancionesDocs = await RegistroAcademico.find({

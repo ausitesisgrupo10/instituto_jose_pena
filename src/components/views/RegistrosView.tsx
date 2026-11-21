@@ -8,7 +8,7 @@ import React, { useEffect, useState } from 'react';
 import { FileSpreadsheet } from 'lucide-react';
 import { IMateria, IRegistroAcademico, IUser } from '../../types.js';
 import { Modal } from '../Modal.js';
-import { CargaCalificacionesDocente } from '../CargaCalificacionesDocente.js';
+import { DocenteRegistrosSancionesPanel } from '../DocenteRegistrosSancionesPanel.js';
 import { exportarRegistrosAExcel, FilaExcelRegistro } from '../../utils/exportExcel.js';
 
 interface RegistrosViewProps {
@@ -94,8 +94,9 @@ export const RegistrosView: React.FC<RegistrosViewProps> = ({ usuario }) => {
   };
 
   useEffect(() => {
+    if (userRol === 'Docente') return;
     fetchDatos();
-  }, []);
+  }, [userRol]);
 
   // Extraer lista única de Cursos/Secciones presentes en los registros
   const listaCursosSecciones = Array.from(
@@ -352,12 +353,12 @@ export const RegistrosView: React.FC<RegistrosViewProps> = ({ usuario }) => {
     exportarRegistrosAExcel(filas, 'Registros_y_Sanciones');
   };
 
+  if (userRol === 'Docente') {
+    return <DocenteRegistrosSancionesPanel usuario={usuario} />;
+  }
+
   return (
     <div className="p-8 max-w-7xl mx-auto font-sans space-y-6">
-      {/* Grilla de Carga Trimestral de Notas y Calificaciones (movida desde Panel Docente) */}
-      {userRol === 'Docente' && (
-        <CargaCalificacionesDocente todosLosRegistros={registros} onDataChanged={fetchDatos} />
-      )}
       {/* Tarjeta Resumen para Alumnos / Padres */}
       {(userRol === 'Alumno' || userRol === 'Padre') && (
         <div className="bg-white rounded-xl p-6 border border-slate-200 shadow-xs grid grid-cols-1 md:grid-cols-3 gap-4">

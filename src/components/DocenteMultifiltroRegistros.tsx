@@ -116,6 +116,14 @@ interface DetalleRegistroAlumno {
     observacion: string;
     materia: string;
   }>;
+  cantidad_inasistencias?: number;
+  inasistencias?: Array<{
+    id: string;
+    fecha: string;
+    valor: string;
+    observacion: string;
+    materia: string;
+  }>;
   observacion_general: string;
 }
 
@@ -1596,6 +1604,71 @@ export const DocenteMultifiltroRegistros: React.FC<DocenteMultifiltroRegistrosPr
                       )}
                     </div>
                   </div>
+
+                  {/* 4b. Asistencias e Inasistencias por Asignatura */}
+                  {detalleAlumno.inasistencias && (
+                    <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                      <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-amber-600" />
+                          <h5 className="font-bold text-xs uppercase tracking-wider text-[#1b2a4a]">
+                            Asistencias e Inasistencias por Asignatura
+                          </h5>
+                        </div>
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold border ${
+                            (detalleAlumno.cantidad_inasistencias || 0) > 0
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          }`}
+                        >
+                          Faltas computadas: {detalleAlumno.cantidad_inasistencias ?? 0}
+                        </span>
+                      </div>
+
+                      <div className="p-4">
+                        {detalleAlumno.inasistencias.length === 0 ? (
+                          <p className="text-xs text-slate-500">
+                            No registra faltas o asistencias cargadas en asignaturas.
+                          </p>
+                        ) : (
+                          <ul className="space-y-2">
+                            {detalleAlumno.inasistencias.map((inas) => {
+                              const esPresente = inas.valor.trim().toLowerCase() === 'presente';
+                              return (
+                                <li
+                                  key={inas.id}
+                                  className={`p-3 rounded-lg border text-xs space-y-1 ${
+                                    esPresente
+                                      ? 'bg-emerald-50/50 border-emerald-200/80'
+                                      : 'bg-amber-50/50 border-amber-200/80'
+                                  }`}
+                                >
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <span
+                                      className={`font-bold ${
+                                        esPresente ? 'text-emerald-800' : 'text-amber-900'
+                                      }`}
+                                    >
+                                      {inas.valor} —{' '}
+                                      <span className="text-slate-700">{inas.materia}</span>
+                                    </span>
+                                    <span className="text-[11px] font-semibold text-slate-500">
+                                      Fecha: {inas.fecha || '-'}
+                                    </span>
+                                  </div>
+                                  <p className="text-slate-700">
+                                    <span className="font-bold text-slate-800">Observación: </span>
+                                    {inas.observacion}
+                                  </p>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {/* 5. Observación General */}
                   <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">

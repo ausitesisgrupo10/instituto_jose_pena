@@ -255,35 +255,87 @@ export async function obtenerMisMateriasYAlumnos(req: AuthRequest, res: Response
       populate: { path: 'curso_id' },
     });
 
+    const [todosAlumnos, todasSecciones, todosCursos] = await Promise.all([
+      User.find({ rol: 'Alumno' })
+        .select('_id nombre apellido dni curso_id seccion_id perfil_metadata')
+        .populate('curso_id', 'nombre_curso')
+        .populate({
+          path: 'seccion_id',
+          select: 'nombre_seccion curso_id',
+          populate: { path: 'curso_id', select: 'nombre_curso' },
+        })
+        .sort({ apellido: 1, nombre: 1 }),
+      Seccion.find({}).populate('curso_id', 'nombre_curso'),
+      Curso.find({}),
+    ]);
+
+    const mapaSecciones = new Map<string, any>();
+    for (const s of todasSecciones) {
+      mapaSecciones.set(String(s._id), s);
+    }
+    const mapaCursos = new Map<string, any>();
+    for (const c of todosCursos) {
+      mapaCursos.set(String(c._id), c);
+    }
+
     const resultado = [];
 
     for (const mat of materias) {
-      const seccionId = mat.seccion_id ? (mat.seccion_id as any)._id : null;
-      let alumnos = [];
+      const seccionObj: any = mat.seccion_id;
+      const seccionId = seccionObj?._id ? String(seccionObj._id) : '';
+      const divisionNombre = seccionObj?.nombre_seccion || 'División A';
+      const cursoNombre = seccionObj?.curso_id?.nombre_curso || '1° Año';
+      const cursoNorm = normalizarTexto(cursoNombre);
+      const divisionNorm = normalizarTexto(divisionNombre);
 
-      if (seccionId) {
-        alumnos = await User.find({
-          rol: 'Alumno',
-          'perfil_metadata.seccion_id': seccionId,
-        }).select('_id nombre apellido dni perfil_metadata');
-      }
+      // Filtrar estrictamente alumnos inscriptos en el curso y división de esta asignatura (sin fallback global)
+      const alumnosDeLaMateria = todosAlumnos.filter((a: any) => {
+        const meta = a.perfil_metadata || {};
+        const aluSeccionDirecta = a.seccion_id?._id ? String(a.seccion_id._id) : '';
+        const aluSeccionMeta = meta.seccion_id ? String(meta.seccion_id) : '';
 
-      if (alumnos.length === 0) {
-        // Fallback si no hay metadata de sección vinculada en el mock
-        alumnos = await User.find({ rol: 'Alumno' }).select('_id nombre apellido dni perfil_metadata');
-      }
+        if (seccionId && (aluSeccionDirecta === seccionId || aluSeccionMeta === seccionId)) {
+          return true;
+        }
+
+        const metaSeccion = meta.seccion_id ? mapaSecciones.get(String(meta.seccion_id)) : null;
+        const metaCurso = meta.curso_id ? mapaCursos.get(String(meta.curso_id)) : null;
+
+        const aluCurso =
+          a.curso_id?.nombre_curso ||
+          a.seccion_id?.curso_id?.nombre_curso ||
+          metaCurso?.nombre_curso ||
+          metaSeccion?.curso_id?.nombre_curso ||
+          meta.curso ||
+          '';
+
+        const aluDivision =
+          a.seccion_id?.nombre_seccion ||
+          metaSeccion?.nombre_seccion ||
+          meta.seccion ||
+          (meta.division ? `División ${meta.division}` : '');
+
+        return (
+          Boolean(cursoNorm && divisionNorm) &&
+          normalizarTexto(aluCurso) === cursoNorm &&
+          normalizarTexto(aluDivision) === divisionNorm
+        );
+      });
 
       resultado.push({
         materia_id: mat._id,
         nombre_materia: mat.nombre_materia,
-        seccion: (mat.seccion_id as any)?.nombre_seccion || 'División A',
-        curso: ((mat.seccion_id as any)?.curso_id as any)?.nombre_curso || '1° Año',
-        alumnos: alumnos.map((a) => ({
+        seccion_id: seccionId || null,
+        seccion: divisionNombre,
+        curso: cursoNombre,
+        alumnos: alumnosDeLaMateria.map((a: any) => ({
           id: a._id,
           nombre: a.nombre,
           apellido: a.apellido,
           dni: a.dni,
           legajo: a.perfil_metadata?.legajo || 'ALU-2026',
+          curso: cursoNombre,
+          division: divisionNombre,
         })),
       });
     }
@@ -769,6 +821,14 @@ export async function obtenerDetalleRegistroAlumno(req: AuthRequest, res: Respon
       materia: string;
     }> = [];
 
+    const inasistencias: Array<{
+      id: string;
+      fecha: string;
+      valor: string;
+      observacion: string;
+      materia: string;
+    }> = [];
+
     for (const reg of registros as any[]) {
       const matObj = reg.materia_id;
       const matId = matObj?._id ? String(matObj._id) : 'sin-materia';
@@ -805,6 +865,14 @@ export async function obtenerDetalleRegistroAlumno(req: AuthRequest, res: Respon
           observacion: reg.observacion || 'Sin observación especificada.',
           materia: matNombre,
         });
+      } else if (reg.tipo === 'inasistencia') {
+        inasistencias.push({
+          id: String(reg._id),
+          fecha: reg.fecha ? new Date(reg.fecha).toISOString().split('T')[0] : '',
+          valor: reg.valor || 'Ausente',
+          observacion: reg.observacion || 'Sin observación especificada.',
+          materia: matNombre,
+        });
       }
     }
 
@@ -824,6 +892,10 @@ export async function obtenerDetalleRegistroAlumno(req: AuthRequest, res: Respon
     const primerTutorConTel = parentescos
       .map((p: any) => p.padre_id?.perfil_metadata?.celular || p.padre_id?.perfil_metadata?.telefono)
       .find(Boolean);
+
+    const cantidadInasistenciasFaltas = inasistencias.filter(
+      (i) => String(i.valor || '').trim().toLowerCase() !== 'presente'
+    ).length;
 
     res.json({
       id: String(alumno._id),
@@ -845,6 +917,8 @@ export async function obtenerDetalleRegistroAlumno(req: AuthRequest, res: Respon
       materias: Array.from(mapaMaterias.values()),
       cantidad_sanciones: sanciones.length,
       sanciones,
+      cantidad_inasistencias: cantidadInasistenciasFaltas,
+      inasistencias,
       observacion_general: observacionGeneral,
     });
   } catch (error: any) {

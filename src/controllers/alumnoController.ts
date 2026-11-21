@@ -67,7 +67,9 @@ export async function obtenerMiBoletin(req: AuthRequest, res: Response): Promise
       observacion: doc.observacion || '',
     }));
 
-    const totalInasistencias = inasistenciasDocs.length;
+    const totalInasistencias = inasistenciasDocs.filter(
+      (doc) => String(doc.valor || '').trim().toLowerCase() !== 'presente'
+    ).length;
 
     // 3. Sanciones (Filtradas estrictamente por alumnoId)
     const sancionesDocs = await RegistroAcademico.find({

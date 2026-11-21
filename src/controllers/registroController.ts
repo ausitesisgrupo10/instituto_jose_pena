@@ -7,7 +7,24 @@
 import { Response } from 'express';
 import { RegistroAcademico } from '../models/RegistroAcademico.js';
 import { Parentesco } from '../models/Parentesco.js';
+import { User } from '../models/User.js';
+import { Materia } from '../models/Materia.js';
 import { AuthRequest } from '../middleware/authMiddleware.js';
+
+async function sincronizarContadorSancionesAlumno(alumnoId: unknown): Promise<void> {
+  if (!alumnoId) return;
+  try {
+    const totalSanciones = await RegistroAcademico.countDocuments({
+      alumno_id: alumnoId as any,
+      tipo: 'sancion',
+    });
+    await User.findByIdAndUpdate(alumnoId, {
+      $set: { 'perfil_metadata.sanciones': totalSanciones },
+    });
+  } catch (err) {
+    console.warn('No se pudo sincronizar contador de sanciones del alumno:', err);
+  }
+}
 
 /**
  * @función registrarCalificacion
@@ -45,7 +62,7 @@ export async function registrarCalificacion(req: AuthRequest, res: Response): Pr
   try {
     const { alumno_id, materia_id, tipo, valor, fecha, observacion, trimestre } = req.body;
 
-    if (!alumno_id || !materia_id || !tipo || valor === undefined) {
+    if (!alumno_id || !materia_id || !tipo || valor === undefined || String(valor).trim() === '') {
       res.status(400).json({ error: 'Faltan campos obligatorios (alumno_id, materia_id, tipo, valor).' });
       return;
     }
@@ -76,6 +93,10 @@ export async function registrarCalificacion(req: AuthRequest, res: Response): Pr
       observacion: observacionFinal,
     });
 
+    if (tipo === 'sancion') {
+      await sincronizarContadorSancionesAlumno(alumno_id);
+    }
+
     const poblado = await RegistroAcademico.findById(registro._id)
       .populate('alumno_id')
       .populate({
@@ -95,24 +116,43 @@ export async function registrarCalificacion(req: AuthRequest, res: Response): Pr
 
 /**
  * @función listarRegistros
- * @descripción Lista los registros académicos aplicando filtros opcionales de tipo, alumno o materia, poblando la sección y el curso.
- * @param {AuthRequest} req - Solicitud de Express con query params (?tipo= &alumno_id= &materia_id=).
- * @param {Response} res - Respuesta de Express con el arreglo de registros.
- * @reglaDeNegocio Alumnos solo ven sus registros. Padres ven solo los de sus hijos vinculados.
+ * @descripción Lista los registros académicos aplicando filtros opcionales de tipo, tipos, alumno, materia, dni, fecha, soloMisMaterias y orden ASC/DESC.
  */
 export async function listarRegistros(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const { tipo, alumno_id, materia_id } = req.query;
+    const { tipo, tipos, alumno_id, materia_id, dni, fecha, soloMisMaterias, orden } =
+      req.query as Record<string, string | undefined>;
     const filtro: any = {};
 
-    if (tipo && tipo !== 'todos') filtro.tipo = tipo;
-    if (materia_id) filtro.materia_id = materia_id;
+    if (tipos && tipos.trim() !== '') {
+      const listaTipos = tipos
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+      if (listaTipos.length > 0) {
+        filtro.tipo = { $in: listaTipos };
+      }
+    } else if (tipo && tipo !== 'todos') {
+      filtro.tipo = tipo;
+    }
+
+    if (materia_id) {
+      filtro.materia_id = materia_id;
+    } else if (soloMisMaterias === 'true' && req.usuario?.rol === 'Docente') {
+      const misMaterias = await Materia.find({ docente_id: req.usuario._id }).select('_id');
+      filtro.materia_id = { $in: misMaterias.map((m) => m._id) };
+    }
+
+    if (fecha && /^\d{4}-\d{2}-\d{2}$/.test(fecha.trim())) {
+      const inicio = new Date(`${fecha.trim()}T00:00:00.000Z`);
+      const fin = new Date(`${fecha.trim()}T23:59:59.999Z`);
+      filtro.fecha = { $gte: inicio, $lte: fin };
+    }
 
     // Lógica por Rol
     if (req.usuario.rol === 'Alumno') {
       filtro.alumno_id = req.usuario._id;
     } else if (req.usuario.rol === 'Padre') {
-      // Buscar hijos del padre
       const parentescos = await Parentesco.find({ padre_id: req.usuario._id } as any);
       const listaHijosIds = parentescos.map((p) => p.alumno_id);
 
@@ -123,7 +163,16 @@ export async function listarRegistros(req: AuthRequest, res: Response): Promise<
       }
     } else if (alumno_id) {
       filtro.alumno_id = alumno_id;
+    } else if (dni && dni.replace(/\D/g, '').trim() !== '') {
+      const dniLimpio = dni.replace(/\D/g, '').trim();
+      const alumnosMatch = await User.find({
+        rol: 'Alumno',
+        dni: { $regex: dniLimpio, $options: 'i' },
+      }).select('_id');
+      filtro.alumno_id = { $in: alumnosMatch.map((a) => a._id) };
     }
+
+    const sortDir = orden === 'asc' ? 1 : -1;
 
     const registros = await RegistroAcademico.find(filtro)
       .populate('alumno_id')
@@ -134,7 +183,18 @@ export async function listarRegistros(req: AuthRequest, res: Response): Promise<
           populate: { path: 'curso_id' },
         },
       })
-      .sort({ fecha: -1 });
+      .sort({ fecha: sortDir, createdAt: sortDir });
+
+    if (orden === 'asc') {
+      registros.sort((a: any, b: any) => {
+        const fa = a.fecha ? new Date(a.fecha).toISOString().split('T')[0] : '';
+        const fb = b.fecha ? new Date(b.fecha).toISOString().split('T')[0] : '';
+        if (fa !== fb) return fa.localeCompare(fb);
+        const dniA = String(a.alumno_id?.dni || '');
+        const dniB = String(b.alumno_id?.dni || '');
+        return dniA.localeCompare(dniB);
+      });
+    }
 
     res.json(registros);
   } catch (error: any) {
@@ -146,18 +206,26 @@ export async function listarRegistros(req: AuthRequest, res: Response): Promise<
 /**
  * @función actualizarRegistro
  * @descripción Modifica un registro académico existente comprobando previamente que la materia pertenezca al docente logueado.
- * @param {AuthRequest} req - Objeto de solicitud Express con datos a actualizar en req.body y el ID en req.params.id.
- * @param {Response} res - Respuesta JSON confirmando la edición o error 403.
- * @reglaDeNegocio Solo el docente a cargo de la materia (o un Admin/No Docente) puede editar sus registros académicos.
  */
 export async function actualizarRegistro(req: AuthRequest, res: Response): Promise<void> {
   try {
     const { id } = req.params;
-    const { valor, fecha, observacion, tipo, trimestre } = req.body;
+    const { valor, fecha, observacion, tipo, trimestre, alumno_id, materia_id } = req.body;
 
+    const previo = await RegistroAcademico.findById(id);
+    if (!previo) {
+      res.status(404).json({ error: 'Registro académico no encontrado.' });
+      return;
+    }
+
+    const tipoFinal = tipo || previo.tipo;
     const updateData: any = {};
+
+    if (alumno_id) updateData.alumno_id = alumno_id;
+    if (materia_id) updateData.materia_id = materia_id;
+
     if (valor !== undefined) {
-      if (tipo === 'nota') {
+      if (tipoFinal === 'nota') {
         const validacion = validarYNormalizarNota(valor);
         if (!validacion.ok) {
           res.status(400).json({ error: validacion.error });
@@ -165,20 +233,25 @@ export async function actualizarRegistro(req: AuthRequest, res: Response): Promi
         }
         updateData.valor = validacion.valorNormalizado;
       } else {
-        updateData.valor = String(valor);
+        const vStr = String(valor).trim();
+        if (!vStr) {
+          res.status(400).json({ error: 'El concepto o valor no puede quedar vacío.' });
+          return;
+        }
+        updateData.valor = vStr;
       }
     }
     if (fecha) updateData.fecha = normalizarFechaRegistro(fecha);
     if (observacion !== undefined) {
       const obsTrim = String(observacion).trim();
-      if (tipo === 'nota' && obsTrim.length > 50) {
+      if (tipoFinal === 'nota' && obsTrim.length > 50) {
         res.status(400).json({ error: 'La observación no puede superar los 50 caracteres.' });
         return;
       }
       updateData.observacion = obsTrim;
     }
     if (tipo) updateData.tipo = tipo;
-    if (trimestre) updateData.trimestre = trimestre;
+    if (trimestre !== undefined && tipoFinal === 'nota') updateData.trimestre = trimestre;
 
     const actualizado = await RegistroAcademico.findByIdAndUpdate(id, updateData, { new: true })
       .populate('alumno_id')
@@ -195,6 +268,13 @@ export async function actualizarRegistro(req: AuthRequest, res: Response): Promi
       return;
     }
 
+    if (previo.tipo === 'sancion' || actualizado.tipo === 'sancion') {
+      await sincronizarContadorSancionesAlumno(previo.alumno_id);
+      if (alumno_id && String(alumno_id) !== String(previo.alumno_id)) {
+        await sincronizarContadorSancionesAlumno(alumno_id);
+      }
+    }
+
     res.json(actualizado);
   } catch (error: any) {
     console.error('❌ Error en actualizarRegistro:', error);
@@ -205,9 +285,6 @@ export async function actualizarRegistro(req: AuthRequest, res: Response): Promi
 /**
  * @función eliminarRegistro
  * @descripción Elimina un registro académico únicamente si pertenece a una materia asignada al docente autenticado.
- * @param {AuthRequest} req - Objeto Express con req.user y el ID del registro en req.params.id.
- * @param {Response} res - Objeto Express para devolver la confirmación o error 403 de permisos.
- * @reglaDeNegocio Un docente no puede modificar ni eliminar registros académicos de asignaturas de otros docentes.
  */
 export async function eliminarRegistro(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -217,6 +294,10 @@ export async function eliminarRegistro(req: AuthRequest, res: Response): Promise
     if (!eliminado) {
       res.status(404).json({ error: 'Registro académico no encontrado.' });
       return;
+    }
+
+    if (eliminado.tipo === 'sancion') {
+      await sincronizarContadorSancionesAlumno(eliminado.alumno_id);
     }
 
     res.json({ mensaje: 'Registro académico eliminado exitosamente.' });
