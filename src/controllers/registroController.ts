@@ -16,6 +16,31 @@ import { AuthRequest } from '../middleware/authMiddleware.js';
  * @param {Response} res - Respuesta de Express con el objeto de registro creado.
  * @reglaDeNegocio Requiere validación previa de titularidad si el usuario posee rol de Docente.
  */
+function normalizarFechaRegistro(fechaRaw: unknown): Date {
+  if (typeof fechaRaw === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(fechaRaw.trim())) {
+    return new Date(`${fechaRaw.trim()}T12:00:00Z`);
+  }
+  return fechaRaw ? new Date(String(fechaRaw)) : new Date();
+}
+
+function validarYNormalizarNota(valorRaw: unknown): { ok: boolean; valorNormalizado?: string; error?: string } {
+  const limpio = String(valorRaw ?? '').trim().replace(',', '.');
+  if (!/^\d{1,2}(\.\d{1,2})?$/.test(limpio)) {
+    return {
+      ok: false,
+      error: 'La calificación debe ser un número decimal con hasta dos dígitos antes y después de la coma (ej: 8,50 o 10,00).',
+    };
+  }
+  const num = parseFloat(limpio);
+  if (isNaN(num) || num < 0 || num > 10) {
+    return {
+      ok: false,
+      error: 'La calificación debe estar comprendida entre 0,00 y 10,00.',
+    };
+  }
+  return { ok: true, valorNormalizado: num.toFixed(2) };
+}
+
 export async function registrarCalificacion(req: AuthRequest, res: Response): Promise<void> {
   try {
     const { alumno_id, materia_id, tipo, valor, fecha, observacion, trimestre } = req.body;
@@ -25,14 +50,30 @@ export async function registrarCalificacion(req: AuthRequest, res: Response): Pr
       return;
     }
 
+    let valorFinal = String(valor).trim();
+    if (tipo === 'nota') {
+      const validacion = validarYNormalizarNota(valor);
+      if (!validacion.ok) {
+        res.status(400).json({ error: validacion.error });
+        return;
+      }
+      valorFinal = validacion.valorNormalizado!;
+    }
+
+    const observacionFinal = typeof observacion === 'string' ? observacion.trim() : '';
+    if (tipo === 'nota' && observacionFinal.length > 50) {
+      res.status(400).json({ error: 'La observación no puede superar los 50 caracteres.' });
+      return;
+    }
+
     const registro = await RegistroAcademico.create({
       alumno_id,
       materia_id,
       tipo,
-      trimestre: tipo === 'nota' ? trimestre || 1 : undefined,
-      valor: String(valor),
-      fecha: fecha ? new Date(fecha) : new Date(),
-      observacion: observacion || '',
+      trimestre: tipo === 'nota' ? Number(trimestre) || 1 : undefined,
+      valor: valorFinal,
+      fecha: normalizarFechaRegistro(fecha),
+      observacion: observacionFinal,
     });
 
     const poblado = await RegistroAcademico.findById(registro._id)
@@ -115,9 +156,27 @@ export async function actualizarRegistro(req: AuthRequest, res: Response): Promi
     const { valor, fecha, observacion, tipo, trimestre } = req.body;
 
     const updateData: any = {};
-    if (valor !== undefined) updateData.valor = String(valor);
-    if (fecha) updateData.fecha = new Date(fecha);
-    if (observacion !== undefined) updateData.observacion = observacion;
+    if (valor !== undefined) {
+      if (tipo === 'nota') {
+        const validacion = validarYNormalizarNota(valor);
+        if (!validacion.ok) {
+          res.status(400).json({ error: validacion.error });
+          return;
+        }
+        updateData.valor = validacion.valorNormalizado;
+      } else {
+        updateData.valor = String(valor);
+      }
+    }
+    if (fecha) updateData.fecha = normalizarFechaRegistro(fecha);
+    if (observacion !== undefined) {
+      const obsTrim = String(observacion).trim();
+      if (tipo === 'nota' && obsTrim.length > 50) {
+        res.status(400).json({ error: 'La observación no puede superar los 50 caracteres.' });
+        return;
+      }
+      updateData.observacion = obsTrim;
+    }
     if (tipo) updateData.tipo = tipo;
     if (trimestre) updateData.trimestre = trimestre;
 

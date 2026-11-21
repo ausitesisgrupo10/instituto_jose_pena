@@ -4,9 +4,10 @@
  */
 
 import React from 'react';
-import { BookOpen } from 'lucide-react';
+import { BookOpen, FileDown } from 'lucide-react';
 import { IUser } from '../types.js';
 import { DirectorNotificacionesBell } from './DirectorNotificacionesBell.js';
+import { descargarPdfDocumentacionTecnica } from '../utils/pdfDocumentacionTecnica.js';
 
 interface HeaderProps {
   title: string;
@@ -28,6 +29,17 @@ export const Header: React.FC<HeaderProps> = ({ title, usuario, onOpenManualDocs
 
       <div className="flex items-center space-x-3">
         {usuario?.rol === 'Director' && <DirectorNotificacionesBell />}
+
+        <button
+          type="button"
+          onClick={descargarPdfDocumentacionTecnica}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-[#1b2a4a] border border-slate-300 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
+          title="Descargar PDF de Fixtures, Versionado y Stack Tecnológico"
+        >
+          <FileDown className="w-3.5 h-3.5 text-[#1b2a4a]" />
+          <span className="hidden sm:inline">PDF Versionado y Tech</span>
+          <span className="sm:hidden">PDF Tech</span>
+        </button>
 
         {onOpenManualDocs && (
           <button

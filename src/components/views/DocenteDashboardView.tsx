@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { IUser } from '../../types.js';
 import { DocenteMultifiltroRegistros } from '../DocenteMultifiltroRegistros.js';
+import { CargaCalificacionesDocente } from '../CargaCalificacionesDocente.js';
 
 interface DocenteDashboardViewProps {
   usuario: IUser | null;
@@ -99,6 +100,7 @@ export const DocenteDashboardView: React.FC<DocenteDashboardViewProps> = ({ tabI
   );
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [refreshRegistrosTrigger, setRefreshRegistrosTrigger] = useState(0);
 
   const cargarInasistencias = useCallback(async () => {
     const token = localStorage.getItem('token');
@@ -633,8 +635,19 @@ export const DocenteDashboardView: React.FC<DocenteDashboardViewProps> = ({ tabI
         </div>
       </div>
 
-      {/* 2. Multifiltro de Búsqueda de Registros */}
-      <DocenteMultifiltroRegistros />
+      {/* 2. Cargar Notas al lado del Buscador Multifiltro de Registros + Resultados abajo */}
+      <DocenteMultifiltroRegistros
+        modoDocenteAsignatura={true}
+        refreshTrigger={refreshRegistrosTrigger}
+        docenteNombre={`${perfil?.apellido || ''}, ${perfil?.nombre || ''}`}
+        docenteDni={perfil?.dni || ''}
+        leftSlot={
+          <CargaCalificacionesDocente
+            soloFormulario={true}
+            onDataChanged={() => setRefreshRegistrosTrigger((prev) => prev + 1)}
+          />
+        }
+      />
     </div>
   );
 };

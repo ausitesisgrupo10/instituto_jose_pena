@@ -309,8 +309,10 @@ function normalizarTexto(texto: string): string {
 
 /**
  * @función buscarRegistrosDocente
- * @descripción Multifiltro de registros de alumnos por Curso, División, Turno, Apellido, Nombre y/o DNI.
- * Devuelve únicamente los campos resumidos: DNI, Apellido, Nombre, Curso y Turno (más división e ID para selección).
+ * @descripción Multifiltro de registros de alumnos por Curso, División, Turno, Apellido, Nombre, DNI y rango de fechas (Fecha Desde / Fecha Hasta).
+ * Cuando consulta un Docente (salvo ?alcance=todos para el modal de Seleccionar Estudiante),
+ * restringe los resultados exclusivamente a los alumnos y registros asociados al DNI/Asignatura(s) del profesor,
+ * calcula el promedio general real según las calificaciones ingresadas y los ordena de forma ASC.
  */
 export async function buscarRegistrosDocente(req: AuthRequest, res: Response): Promise<void> {
   try {
@@ -319,7 +321,22 @@ export async function buscarRegistrosDocente(req: AuthRequest, res: Response): P
       return;
     }
 
-    const { curso, division, turno, apellido, nombre, dni } = req.query as Record<string, string | undefined>;
+    const {
+      curso,
+      division,
+      turno,
+      apellido,
+      nombre,
+      dni,
+      fechaDesde,
+      fechaHasta,
+      alcance,
+      soloAsignaturasDocente,
+    } = req.query as Record<string, string | undefined>;
+
+    const esModoAsignaturaDocente =
+      soloAsignaturasDocente === 'true' ||
+      (req.usuario.rol === 'Docente' && alcance !== 'todos');
 
     const filtroCurso = curso ? normalizarTexto(curso) : '';
     const filtroDivision = division ? normalizarTexto(division) : '';
@@ -328,19 +345,92 @@ export async function buscarRegistrosDocente(req: AuthRequest, res: Response): P
     const filtroNombre = nombre ? normalizarTexto(nombre) : '';
     const filtroDni = dni ? dni.replace(/\D/g, '').trim() : '';
 
-    const [alumnos, todasSecciones, todosCursos] = await Promise.all([
-      User.find({ rol: 'Alumno' })
-        .select('_id dni nombre apellido rol estado turno curso_id seccion_id perfil_metadata')
-        .populate('curso_id', 'nombre_curso nivel')
-        .populate({
-          path: 'seccion_id',
-          select: 'nombre_seccion turno curso_id',
-          populate: { path: 'curso_id', select: 'nombre_curso nivel' },
-        })
-        .sort({ apellido: 1, nombre: 1 }),
-      Seccion.find({}).populate('curso_id', 'nombre_curso nivel'),
-      Curso.find({}),
-    ]);
+    const fechaDesdeDate =
+      fechaDesde && /^\d{4}-\d{2}-\d{2}$/.test(fechaDesde.trim())
+        ? new Date(`${fechaDesde.trim()}T00:00:00.000Z`)
+        : null;
+    const fechaHastaDate =
+      fechaHasta && /^\d{4}-\d{2}-\d{2}$/.test(fechaHasta.trim())
+        ? new Date(`${fechaHasta.trim()}T23:59:59.999Z`)
+        : null;
+    const hayFiltroFecha = Boolean(fechaDesdeDate || fechaHastaDate);
+
+    // Si está en modo docente por asignatura, resolver sus materias asignadas por su ID/DNI
+    let asignaturasDocente: Array<{
+      materia_id: string;
+      nombre_materia: string;
+      seccion_id: string;
+      curso: string;
+      division: string;
+      turno: string;
+    }> = [];
+
+    if (esModoAsignaturaDocente) {
+      const materiasDoc = await Materia.find({ docente_id: req.usuario._id }).populate({
+        path: 'seccion_id',
+        populate: { path: 'curso_id' },
+      });
+
+      asignaturasDocente = materiasDoc.map((mat: any) => {
+        const sec = mat.seccion_id;
+        const cur = sec?.curso_id;
+        return {
+          materia_id: String(mat._id),
+          nombre_materia: mat.nombre_materia || 'Asignatura',
+          seccion_id: sec?._id ? String(sec._id) : '',
+          curso: cur?.nombre_curso || '',
+          division: sec?.nombre_seccion || '',
+          turno: sec?.turno || '',
+        };
+      });
+
+      if (asignaturasDocente.length === 0) {
+        res.json({
+          total: 0,
+          asignaturas_docente: [],
+          resultados: [],
+        });
+        return;
+      }
+    }
+
+    const materiaIdsDocente = asignaturasDocente.map((a) => a.materia_id);
+    const seccionIdsDocente = new Set(
+      asignaturasDocente.map((a) => a.seccion_id).filter(Boolean)
+    );
+    const paresCursoDivisionDocente = asignaturasDocente
+      .filter((a) => a.curso && a.division)
+      .map((a) => ({
+        cursoNorm: normalizarTexto(a.curso),
+        divisionNorm: normalizarTexto(a.division),
+        nombre_materia: a.nombre_materia,
+      }));
+
+    const filtroNotasQuery: any = { tipo: 'nota' };
+    if (esModoAsignaturaDocente) {
+      filtroNotasQuery.materia_id = { $in: materiaIdsDocente };
+    }
+
+    const [alumnos, todasSecciones, todosCursos, todasNotas, todosRegistrosDocente] =
+      await Promise.all([
+        User.find({ rol: 'Alumno' })
+          .select('_id dni nombre apellido rol estado turno curso_id seccion_id perfil_metadata')
+          .populate('curso_id', 'nombre_curso nivel')
+          .populate({
+            path: 'seccion_id',
+            select: 'nombre_seccion turno curso_id',
+            populate: { path: 'curso_id', select: 'nombre_curso nivel' },
+          })
+          .sort({ apellido: 1, nombre: 1 }),
+        Seccion.find({}).populate('curso_id', 'nombre_curso nivel'),
+        Curso.find({}),
+        RegistroAcademico.find(filtroNotasQuery).select('alumno_id materia_id valor fecha'),
+        esModoAsignaturaDocente
+          ? RegistroAcademico.find({ materia_id: { $in: materiaIdsDocente } }).select(
+              'alumno_id materia_id fecha'
+            )
+          : Promise.resolve([]),
+      ]);
 
     const mapaSecciones = new Map<string, any>();
     for (const s of todasSecciones) {
@@ -351,9 +441,58 @@ export async function buscarRegistrosDocente(req: AuthRequest, res: Response): P
       mapaCursos.set(String(c._id), c);
     }
 
+    const mapaNombreMateriaPorId = new Map<string, string>();
+    for (const a of asignaturasDocente) {
+      mapaNombreMateriaPorId.set(a.materia_id, a.nombre_materia);
+    }
+
+    // Alumnos que tienen al menos un registro académico dentro de las asignaturas del docente
+    const alumnosConRegistroEnMateria = new Map<string, Set<string>>();
+    const alumnosConRegistroEnRangoFecha = new Set<string>();
+
+    for (const reg of todosRegistrosDocente as any[]) {
+      const alId = String(reg.alumno_id);
+      const matId = String(reg.materia_id);
+      const setMats = alumnosConRegistroEnMateria.get(alId) || new Set<string>();
+      const nombreMat = mapaNombreMateriaPorId.get(matId);
+      if (nombreMat) setMats.add(nombreMat);
+      alumnosConRegistroEnMateria.set(alId, setMats);
+
+      if (hayFiltroFecha && reg.fecha) {
+        const f = new Date(reg.fecha);
+        const cumpleDesde = !fechaDesdeDate || f >= fechaDesdeDate;
+        const cumpleHasta = !fechaHastaDate || f <= fechaHastaDate;
+        if (cumpleDesde && cumpleHasta) {
+          alumnosConRegistroEnRangoFecha.add(alId);
+        }
+      }
+    }
+
+    // Agrupar notas válidas por alumno (respetando rango Fecha Desde / Fecha Hasta si fue ingresado)
+    const notasPorAlumno = new Map<string, number[]>();
+    for (const n of todasNotas as any[]) {
+      if (hayFiltroFecha) {
+        if (!n.fecha) continue;
+        const f = new Date(n.fecha);
+        if (fechaDesdeDate && f < fechaDesdeDate) continue;
+        if (fechaHastaDate && f > fechaHastaDate) continue;
+      }
+      const num = parseFloat(String(n.valor).replace(',', '.'));
+      if (isNaN(num)) continue;
+      const alId = String(n.alumno_id);
+      const lista = notasPorAlumno.get(alId) || [];
+      lista.push(num);
+      notasPorAlumno.set(alId, lista);
+    }
+
     const resultados = alumnos
       .map((al: any) => {
         const meta = al.perfil_metadata || {};
+        const seccionIdDirecto = al.seccion_id?._id
+          ? String(al.seccion_id._id)
+          : meta.seccion_id
+          ? String(meta.seccion_id)
+          : '';
         const metaSeccion = meta.seccion_id
           ? mapaSecciones.get(String(meta.seccion_id))
           : null;
@@ -382,8 +521,49 @@ export async function buscarRegistrosDocente(req: AuthRequest, res: Response): P
           meta.turno ||
           'Sin turno';
 
+        const alIdStr = String(al._id);
+        const cursoNorm = normalizarTexto(cursoNombre);
+        const divNorm = normalizarTexto(divisionNombre);
+
+        // Determinar asignaturas del docente asociadas a este estudiante
+        const asignaturasAsociadas = new Set<string>();
+        for (const asig of asignaturasDocente) {
+          if (asig.seccion_id && seccionIdDirecto && asig.seccion_id === seccionIdDirecto) {
+            asignaturasAsociadas.add(asig.nombre_materia);
+          }
+        }
+        for (const par of paresCursoDivisionDocente) {
+          if (cursoNorm === par.cursoNorm && divNorm === par.divisionNorm) {
+            asignaturasAsociadas.add(par.nombre_materia);
+          }
+        }
+        const matsPorRegistro = alumnosConRegistroEnMateria.get(alIdStr);
+        if (matsPorRegistro) {
+          matsPorRegistro.forEach((m) => asignaturasAsociadas.add(m));
+        }
+
+        const notasCalculo = notasPorAlumno.get(alIdStr) || [];
+        const promedioCalculado =
+          notasCalculo.length > 0
+            ? Number(
+                (
+                  notasCalculo.reduce((acc, v) => acc + v, 0) / notasCalculo.length
+                ).toFixed(2)
+              )
+            : null;
+
+        const promedioFinal = esModoAsignaturaDocente
+          ? promedioCalculado
+          : promedioCalculado !== null
+          ? promedioCalculado
+          : meta.promedio_general !== undefined &&
+            meta.promedio_general !== null &&
+            meta.promedio_general !== ''
+          ? Number(meta.promedio_general)
+          : '';
+
         return {
-          id: String(al._id),
+          id: alIdStr,
           dni: al.dni || '',
           apellido: al.apellido || '',
           nombre: al.nombre || '',
@@ -398,17 +578,34 @@ export async function buscarRegistrosDocente(req: AuthRequest, res: Response): P
           localidad: meta.localidad || '',
           provincia: meta.provincia || '',
           contacto: meta.contacto || meta.telefono || '',
-          promedio_general:
-            meta.promedio_general !== undefined && meta.promedio_general !== null && meta.promedio_general !== ''
-              ? Number(meta.promedio_general)
-              : '',
+          asignaturas: Array.from(asignaturasAsociadas),
+          cantidad_notas: notasCalculo.length,
+          promedio_general: promedioFinal,
           sanciones:
             meta.sanciones !== undefined && meta.sanciones !== null && meta.sanciones !== ''
               ? Number(meta.sanciones)
               : 0,
+          _perteneceSeccionDocente:
+            (seccionIdDirecto && seccionIdsDocente.has(seccionIdDirecto)) ||
+            asignaturasAsociadas.size > 0,
         };
       })
       .filter((item) => {
+        if (esModoAsignaturaDocente) {
+          if (!item._perteneceSeccionDocente) {
+            return false;
+          }
+          if (hayFiltroFecha) {
+            const tieneNotaEnRango = item.cantidad_notas > 0;
+            const tieneOtroRegistroEnRango = alumnosConRegistroEnRangoFecha.has(item.id);
+            if (!tieneNotaEnRango && !tieneOtroRegistroEnRango) {
+              return false;
+            }
+          }
+        } else if (hayFiltroFecha) {
+          if (item.cantidad_notas === 0) return false;
+        }
+
         if (filtroCurso && !normalizarTexto(item.curso).includes(filtroCurso)) {
           return false;
         }
@@ -428,10 +625,38 @@ export async function buscarRegistrosDocente(req: AuthRequest, res: Response): P
           return false;
         }
         return true;
+      })
+      .map(({ _perteneceSeccionDocente, ...rest }) => rest);
+
+    if (esModoAsignaturaDocente) {
+      // Ordenar de forma ASC según el promedio general calculado con las calificaciones ingresadas
+      resultados.sort((a, b) => {
+        const promA =
+          typeof a.promedio_general === 'number' && !isNaN(a.promedio_general)
+            ? a.promedio_general
+            : null;
+        const promB =
+          typeof b.promedio_general === 'number' && !isNaN(b.promedio_general)
+            ? b.promedio_general
+            : null;
+
+        if (promA !== null && promB !== null) {
+          if (promA !== promB) return promA - promB;
+        } else if (promA !== null) {
+          return -1;
+        } else if (promB !== null) {
+          return 1;
+        }
+
+        const cmpAp = a.apellido.localeCompare(b.apellido, 'es');
+        if (cmpAp !== 0) return cmpAp;
+        return a.nombre.localeCompare(b.nombre, 'es');
       });
+    }
 
     res.json({
       total: resultados.length,
+      asignaturas_docente: asignaturasDocente,
       resultados,
     });
   } catch (error: any) {
